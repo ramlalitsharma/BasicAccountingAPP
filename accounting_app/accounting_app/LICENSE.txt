@@ -1,0 +1,29 @@
+END USER LICENSE AGREEMENT (EULA) FOR ACCOUNTING PRO
+
+Copyright (c) 2026 Accounting Pro. All rights reserved.
+
+This software is provided for personal and business use. By installing
+and using this software, you agree to the following terms:
+
+1. LICENSE GRANT: This software is licensed, not sold. You are granted
+   a non-exclusive, non-transferable license to use this software on
+   one computer at a time.
+
+2. RESTRICTIONS: You may not reverse engineer, decompile, modify,
+   or distribute this software without prior written permission.
+
+3. DATA: All data created with this software is stored locally in
+   Excel (.xlsx) files. You retain full ownership of your data.
+   The software developer is not responsible for data loss.
+
+4. DISCLAIMER: This software is provided "as is" without warranty
+   of any kind, either express or implied, including but not limited
+   to the implied warranties of merchantability and fitness for a
+   particular purpose.
+
+5. LIMITATION OF LIABILITY: In no event shall the developer be liable
+   for any damages arising out of the use or inability to use this
+   software.
+
+6. ACCEPTANCE: By clicking "I Agree" and installing this software,
+   you accept the terms of this agreement.
