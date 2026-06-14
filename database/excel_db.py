@@ -2,12 +2,14 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import os
+import shutil
 from datetime import datetime
-from config import DATA_DIR, set_setting
+from config import DATA_DIR, BACKUP_DIR, set_setting
 from utils.update_checker import get_update_status
 
 
 _active_file = None
+SHEET_VERSION = "2.0"
 
 
 def _check_write_lock():
@@ -17,6 +19,7 @@ def _check_write_lock():
             f"Update Required: v{status['latest_version']} available.\n"
             "Please update to the latest version to continue editing."
         )
+
 SHEETS = {
     "Suppliers": ["ID", "Name", "Contact", "Address", "Created_At"],
     "Stock": ["ID", "Item_Name", "Category", "Quantity", "Min_Quantity",
@@ -45,13 +48,47 @@ def get_active_file():
     return _active_file
 
 
+def _backup_file(filepath):
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = os.path.basename(filepath)
+    backup_path = os.path.join(BACKUP_DIR, f"pre_{ts}_{base}")
+    try:
+        shutil.copy2(filepath, backup_path)
+    except Exception:
+        pass
+
+
 def _ensure_sheets(wb):
+    changed = False
     for name, headers in SHEETS.items():
         if name not in wb.sheetnames:
             ws = wb.create_sheet(name)
             ws.append(headers)
+            changed = True
     if "Sheet" in wb.sheetnames:
         del wb["Sheet"]
+        changed = True
+    return changed
+
+
+def _validate_sheets(wb):
+    issues = []
+    for name, headers in SHEETS.items():
+        if name in wb.sheetnames:
+            ws = wb[name]
+            actual = [cell.value for cell in ws[1]] if ws.max_row > 0 else []
+            if not actual:
+                ws.append(headers)
+                issues.append(f"Added missing headers to {name}")
+            else:
+                for expected in headers:
+                    if expected not in actual:
+                        missing_idx = headers.index(expected)
+                        col_letter = get_column_letter(missing_idx + 1)
+                        ws[f"{col_letter}1"] = expected
+                        issues.append(f"Fixed missing column '{expected}' in {name}")
+    return issues
 
 
 def create_new_workbook(filepath=None):
@@ -79,9 +116,16 @@ def create_new_workbook(filepath=None):
 
 
 def open_workbook(filepath):
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found:\n{filepath}")
+    if not filepath.endswith(".xlsx"):
+        raise ValueError("Please select a valid .xlsx file")
+    _backup_file(filepath)
     wb = openpyxl.load_workbook(filepath)
-    _ensure_sheets(wb)
-    wb.save(filepath)
+    changed = _ensure_sheets(wb)
+    issues = _validate_sheets(wb)
+    if changed or issues:
+        wb.save(filepath)
     set_active_file(filepath)
     return filepath
 

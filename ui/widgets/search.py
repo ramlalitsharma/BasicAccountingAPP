@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from config import FONT_FAMILY, FONT_SIZE_MD, TEXT_MUTED, TEXT_PRIMARY
 
 
 class SearchBar(ttk.Frame):
@@ -12,14 +13,17 @@ class SearchBar(ttk.Frame):
         self.var = tk.StringVar()
         self.var.trace_add("write", self._on_change)
 
-        ttk.Label(self, text="Search:").pack(side=tk.LEFT, padx=(0, 5))
+        lbl = ttk.Label(self, text="Search:", font=(FONT_FAMILY, FONT_SIZE_MD))
+        lbl.pack(side=tk.LEFT, padx=(0, 5))
+
         self.entry = ttk.Entry(self, textvariable=self.var, width=30)
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.entry.insert(0, placeholder)
+        self.entry.configure(foreground=TEXT_MUTED)
         self.entry.bind("<FocusIn>", lambda e: self._clear_placeholder())
         self.entry.bind("<FocusOut>", lambda e: self._restore_placeholder())
 
-        clear_btn = ttk.Button(self, text="Clear", command=self.clear)
+        clear_btn = ttk.Button(self, text="\u2716", width=3, command=self.clear)
         clear_btn.pack(side=tk.LEFT, padx=(5, 0))
 
         self.after(100, self._mark_ready)
@@ -38,11 +42,13 @@ class SearchBar(ttk.Frame):
         if self._has_placeholder:
             self.var.set("")
             self._has_placeholder = False
+            self.entry.configure(foreground=TEXT_PRIMARY)
 
     def _restore_placeholder(self):
         if not self.var.get():
             self.var.set(self._placeholder)
             self._has_placeholder = True
+            self.entry.configure(foreground=TEXT_MUTED)
 
     def get(self):
         v = self.var.get()

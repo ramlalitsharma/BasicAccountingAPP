@@ -1,10 +1,10 @@
-; Accounting Pro Installer
+; Accounting Pro v2.5.0 Installer
 ; Requires Inno Setup 6+ (https://jrsoftware.org/isdl.php)
 
 #define MyAppName "Accounting Pro"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "2.5.0"
 #define MyAppPublisher "Accounting Pro"
-#define MyAppURL "https://accountingpro.example.com"
+#define MyAppURL "https://github.com/ramlalitsharma/BasicAccountingAPP"
 #define MyAppExeName "AccountingPro.exe"
 #define MyAppIcon "..\icon\accounting_pro.ico"
 
@@ -15,7 +15,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
@@ -34,6 +34,10 @@ ChangesAssociations=yes
 SetupIconFile={#MyAppIcon}
 LicenseFile=..\LICENSE.txt
 InfoBeforeFile=..\README.txt
+VersionInfoVersion={#MyAppVersion}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName}
+VersionInfoTextVersion={#MyAppVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -1,8 +1,13 @@
 import tkinter as tk
 from tkinter import ttk
-from config import ACCENT_COLOR, CARD_BG, BG_COLOR, FONT_FAMILY
+from config import (
+    ACCENT_COLOR, CARD_BG, BG_COLOR, BG_DARK, FONT_FAMILY,
+    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, CARD_BORDER,
+    FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG,
+)
 
-ALT_ROW_BG = "#f8f9fa"
+ALT_ROW_BG = "#F8FAFC"
+LOW_STOCK_BG = "#FEF2F2"
 
 
 class Table(ttk.Frame):
@@ -40,7 +45,7 @@ class Table(ttk.Frame):
         scroll_x = ttk.Scrollbar(self, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
-        self.tree.grid(row=0, column=0, columnspan=4, sticky="nsew")
+        self.tree.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=0)
         scroll_y.grid(row=0, column=4, sticky="ns")
         scroll_x.grid(row=1, column=0, columnspan=4, sticky="ew")
 
@@ -50,8 +55,10 @@ class Table(ttk.Frame):
         self.nav_frame = ttk.Frame(self)
         self.nav_frame.grid(row=2, column=0, columnspan=4, pady=6, sticky="ew")
 
-        self.info_lbl = ttk.Label(self.nav_frame, text="", font=(FONT_FAMILY, 9))
-        self.info_lbl.pack(side=tk.LEFT, padx=10)
+        self.info_lbl = ttk.Label(self.nav_frame, text="",
+                                  font=(FONT_FAMILY, FONT_SIZE_SM),
+                                  foreground=TEXT_SECONDARY)
+        self.info_lbl.pack(side=tk.LEFT, padx=PADDING_MD if 'PADDING_MD' in dir() else 10)
 
         btn_frame = ttk.Frame(self.nav_frame)
         btn_frame.pack(side=tk.RIGHT, padx=10)
@@ -64,7 +71,7 @@ class Table(ttk.Frame):
                                    command=self._prev_page)
         self.prev_btn.pack(side=tk.LEFT, padx=1)
 
-        self.page_lbl = ttk.Label(btn_frame, text="", font=(FONT_FAMILY, 9))
+        self.page_lbl = ttk.Label(btn_frame, text="", font=(FONT_FAMILY, FONT_SIZE_SM))
         self.page_lbl.pack(side=tk.LEFT, padx=8)
 
         self.next_btn = ttk.Button(btn_frame, text="\u25B6", width=3,
@@ -111,7 +118,7 @@ class Table(ttk.Frame):
 
         self.tree.tag_configure("evenrow", background=ALT_ROW_BG)
         self.tree.tag_configure("oddrow", background=CARD_BG)
-        self.tree.tag_configure("low_stock", background="#ffe0e0")
+        self.tree.tag_configure("low_stock", background=LOW_STOCK_BG)
 
         for idx, row in enumerate(page_rows):
             values = [row.get(col, "") for col in self.columns]

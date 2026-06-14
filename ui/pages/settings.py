@@ -1,7 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from config import ACCENT_COLOR, FONT_FAMILY, APP_NAME, VERSION, USER_DATA_DIR, update_data_dir
+from config import (
+    ACCENT_COLOR, ACCENT_LIGHT, FONT_FAMILY, APP_NAME, VERSION,
+    USER_DATA_DIR, update_data_dir, TEXT_PRIMARY, TEXT_MUTED,
+    FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL, FONT_SIZE_XXL,
+)
 from utils.company import load_company, save_company
+from utils.update_checker import get_update_status, RELEASE_BASE_URL
 
 
 class SettingsPage(ttk.Frame):
@@ -20,6 +25,7 @@ class SettingsPage(ttk.Frame):
 
         self._general_tab(notebook)
         self._company_tab(notebook)
+        self._updates_tab(notebook)
 
     def _general_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
@@ -60,6 +66,86 @@ class SettingsPage(ttk.Frame):
                        "Built with Python & Tkinter\n"
                        "Database: Microsoft Excel (.xlsx)",
                   foreground="#777").grid(row=5, column=1, sticky="w", padx=10)
+
+    def _updates_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Updates  ")
+
+        row = 0
+        ttk.Label(frame, text="Update Settings",
+                  font=("Segoe UI", 12, "bold")).grid(
+            row=row, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        row += 1
+
+        status = get_update_status()
+
+        info_items = [
+            ("Current Version", f"v{VERSION}"),
+            ("Latest Available", f"v{status['latest_version']}" if status['latest_version'] else "Not checked"),
+            ("Last Checked", status['last_check'] if status['last_check'] else "Never"),
+            ("Online Status", "\u2713 Online" if status['is_online_now'] else "\u2717 Offline"),
+        ]
+        for label, value in info_items:
+            ttk.Label(frame, text=label + ":",
+                      font=("Segoe UI", 10, "bold")).grid(
+                row=row, column=0, sticky="w", pady=3, padx=(0, 15))
+            ttk.Label(frame, text=value,
+                      font=("Segoe UI", 10)).grid(
+                row=row, column=1, sticky="w", pady=3)
+            row += 1
+
+        row += 1
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=row, column=0, columnspan=2, pady=10, sticky="w")
+
+        def check_now():
+            self._app.check_updates_now(True)
+
+        ttk.Button(btn_frame, text="\u21BB  Check for Updates Now",
+                   command=check_now).pack(side=tk.LEFT, padx=5)
+
+        def open_releases():
+            import webbrowser
+            webbrowser.open(RELEASE_BASE_URL)
+
+        ttk.Button(btn_frame, text="\u2197  View All Releases",
+                   command=open_releases).pack(side=tk.LEFT, padx=5)
+
+        history = status.get("update_history", [])
+        if history and isinstance(history, list) and len(history) > 0:
+            row += 2
+            sep = ttk.Separator(frame, orient="horizontal")
+            sep.grid(row=row, column=0, columnspan=3, sticky="ew", pady=10)
+            row += 1
+
+            ttk.Label(frame, text="Update History",
+                      font=("Segoe UI", 11, "bold")).grid(
+                row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
+            row += 1
+
+            tree_frame = ttk.Frame(frame)
+            tree_frame.grid(row=row, column=0, columnspan=2, sticky="nsew")
+            frame.grid_rowconfigure(row, weight=1)
+            frame.grid_columnconfigure(1, weight=1)
+
+            cols = ["Version", "Detected At", "Highlights"]
+            tree = ttk.Treeview(tree_frame, columns=cols, show="headings", height=5)
+            for col in cols:
+                tree.heading(col, text=col)
+                tree.column(col, width=120)
+            tree.column("Highlights", width=250)
+
+            for h in reversed(history[-10:]):
+                tree.insert("", tk.END, values=[
+                    h.get("version", ""),
+                    h.get("detected_at", ""),
+                    h.get("changelog", "")[:60],
+                ])
+
+            scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=scroll.set)
+            tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
     def _company_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
@@ -120,26 +206,36 @@ class SettingsPage(ttk.Frame):
                                 "Existing files must be moved manually.")
 
     def _toggle_theme(self, *args):
+        from config import (
+            BG_COLOR as OLD_BG, BG_DARK as OLD_BG_DARK,
+            CARD_BG as OLD_CARD, TEXT_PRIMARY as OLD_FG,
+            SIDEBAR_BG as OLD_SIDEBAR,
+        )
         theme = self.theme_var.get()
         if theme == "Dark":
-            bg, fg, card = "#2d2d2d", "#ffffff", "#3d3d3d"
+            bg, fg, card = "#1E293B", "#F1F5F9", "#334155"
+            sidebar = "#0F172A"
         else:
-            bg, fg, card = "#f0f2f5", "#2c3e50", "#ffffff"
+            bg, fg, card = "#F1F5F9", "#1E293B", "#FFFFFF"
+            sidebar = "#0F172A"
 
         self._app.configure(bg=bg)
 
         def apply_theme(widget):
+            old_bgs = (OLD_BG, OLD_BG_DARK, OLD_CARD, "#2d2d2d", "#ffffff",
+                       "#3d3d3d", "#1a1a2e", "#16213e", "#0f3460")
+            old_fgs = (OLD_FG, "#2c3e50", "#ffffff", "#777", "#c8d6e5")
             try:
                 if isinstance(widget, (tk.Label, tk.Frame, tk.Button)):
                     cbg = widget.cget("bg")
-                    if cbg in ("#f0f2f5", "#2d2d2d", "#ffffff", "#3d3d3d",
-                               "#1a1a2e", "#16213e", "#0f3460"):
-                        widget.configure(
-                            bg=bg if cbg != "#1a1a2e" else "#1a1a2e")
+                    if cbg in old_bgs:
+                        new_bg = card if cbg in (OLD_CARD, "#ffffff", "#3d3d3d") else (
+                            sidebar if cbg in ("#1a1a2e", "#0f3460", "#16213e") else bg)
+                        widget.configure(bg=new_bg)
                 if isinstance(widget, (tk.Label, tk.Button)):
                     cfg = widget.cget("fg")
-                    if cfg in ("#2c3e50", "#ffffff", "#777", "#c8d6e5"):
-                        widget.configure(fg=fg if cfg != "#c8d6e5" else fg)
+                    if cfg in old_fgs:
+                        widget.configure(fg=fg)
             except tk.TclError:
                 pass
             for child in widget.winfo_children():

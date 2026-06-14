@@ -1,6 +1,8 @@
 {
-  "latest_version": "1.0.0",
-  "download_url": "",
-  "changelog": "Initial commercial release",
+  "latest_version": "2.5.0",
+  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.5.0/AccountingPro_Setup_v2.5.0.exe",
+  "changelog": "Major UI overhaul with modern design\n- New modern color palette and professional styling\n- Redesigned sidebar with active navigation indicators\n- Status bar showing app version and status\n- Enhanced dashboard with improved cards\n- Better table styling with alternating rows\n- In-app update download with progress bar\n- Skip version feature for updates\n- Automatic periodic update checks (every 24h)\n- Offline detection with retry\n- Improved database creation with validation\n- Better error handling throughout",
+  "release_date": "2026-06-14",
+  "file_size_mb": 25,
   "critical": false
 }
