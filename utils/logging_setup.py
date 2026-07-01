@@ -1,11 +1,12 @@
 import logging
 import logging.handlers
+import json
 import os
 import sys
 from pathlib import Path
 
 
-def setup_logging(log_dir=None):
+def setup_logging(log_dir=None, level=None):
     if log_dir is None:
         if getattr(sys, "frozen", False):
             base = Path(os.path.dirname(sys.executable))
@@ -14,13 +15,21 @@ def setup_logging(log_dir=None):
         log_dir = base / "logs"
     os.makedirs(log_dir, exist_ok=True)
 
+    if level is None:
+        try:
+            from config import get_setting
+            level_name = get_setting("log_level", "INFO")
+            level = getattr(logging, level_name.upper(), logging.INFO)
+        except (FileNotFoundError, json.JSONDecodeError, KeyError, OSError):
+            level = logging.INFO
+
     fmt = logging.Formatter(
         "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     root = logging.getLogger()
-    root.setLevel(logging.INFO)
+    root.setLevel(level)
 
     for h in root.handlers[:]:
         root.removeHandler(h)

@@ -3,7 +3,9 @@ from tkinter import ttk, messagebox
 from database import models
 from ui.widgets.table import Table
 from ui.widgets.search import SearchBar
+from ui.widgets.tooltip import ToolTip
 from utils.export import export_to_csv
+from config import FONT_FAMILY, BG_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, FONT_SIZE_MD, FONT_SIZE_XL
 
 
 class PurchasesPage(ttk.Frame):
@@ -13,7 +15,7 @@ class PurchasesPage(ttk.Frame):
 
     def _build_ui(self):
         header = ttk.Label(self, text="Purchase Orders",
-                           font=("Segoe UI", 20, "bold"))
+                           font=(FONT_FAMILY, 20, "bold"))
         header.pack(anchor="w", padx=20, pady=(20, 10))
 
         toolbar = ttk.Frame(self)
@@ -21,21 +23,41 @@ class PurchasesPage(ttk.Frame):
 
         self.search = SearchBar(toolbar, callback=self._on_search)
         self.search.pack(side=tk.LEFT)
+        ToolTip(self.search.entry, "Search purchases by item or supplier")
 
-        ttk.Button(toolbar, text="New Purchase",
-                   command=self._add_form).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(toolbar, text="Export CSV",
-                   command=self._export).pack(side=tk.RIGHT, padx=(5, 0))
+        add_btn = ttk.Button(toolbar, text="New Purchase",
+                   command=self._add_form)
+        add_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(add_btn, "Record a new purchase")
+
+        exp_btn = ttk.Button(toolbar, text="Export CSV",
+                   command=self._export)
+        exp_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(exp_btn, "Export purchases to CSV file")
+
+        self._container = tk.Frame(self, bg=BG_COLOR)
+        self._container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+
+        self._empty_state = tk.Frame(self._container, bg=BG_COLOR)
+        self._empty_lbl = tk.Label(self._empty_state, text="\uD83D\uDED2",
+                                   font=("Segoe UI Emoji", 48), bg=BG_COLOR, fg="#CCCCCC")
+        self._empty_lbl.pack(pady=(40, 10))
+        tk.Label(self._empty_state, text="No purchase orders yet",
+                 font=(FONT_FAMILY, FONT_SIZE_XL, "bold"), bg=BG_COLOR, fg=TEXT_PRIMARY).pack()
+        tk.Label(self._empty_state, text="Click 'New Purchase' to record your first order.",
+                 font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
         cols = {"Item": 160, "Supplier": 150, "Qty": 70, "Cost": 90,
                 "Total": 100, "Date": 150}
-        self.table = Table(self, columns=cols, key_column="ID")
-        self.table.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        self.table = Table(self._container, columns=cols, key_column="ID")
 
         self.refresh()
 
     def refresh(self):
-        data = models.get_purchases(search=self.search.get())
+        try:
+            data = models.get_purchases(search=self.search.get())
+        except FileNotFoundError:
+            data = []
         display = []
         for r in data:
             display.append({
@@ -48,6 +70,12 @@ class PurchasesPage(ttk.Frame):
                 "Date": r.get("Purchase_Date", ""),
             })
         self.table.populate(display)
+        if not display:
+            self.table.pack_forget()
+            self._empty_state.pack(fill=tk.BOTH, expand=True)
+        else:
+            self._empty_state.pack_forget()
+            self.table.pack(fill=tk.BOTH, expand=True)
 
     def _on_search(self, text):
         self.refresh()
@@ -92,11 +120,16 @@ class PurchasesPage(ttk.Frame):
                 messagebox.showerror("Error", "Select a valid item")
                 return
             try:
-                qty = int(qty_entry.get())
-                cost = float(cost_entry.get())
-                if qty <= 0 or cost <= 0:
-                    raise ValueError
-            except ValueError:
+                qty = int(qty_entry.get().strip())
+            except (ValueError, TypeError):
+                messagebox.showerror("Input Error", "Please enter a valid number for Quantity.")
+                return
+            try:
+                cost = float(cost_entry.get().strip())
+            except (ValueError, TypeError):
+                messagebox.showerror("Input Error", "Please enter a valid number for Cost.")
+                return
+            if qty <= 0 or cost <= 0:
                 messagebox.showerror("Error", "Quantity and Cost must be positive numbers")
                 return
             try:

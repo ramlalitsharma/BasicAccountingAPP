@@ -3,7 +3,9 @@ from tkinter import ttk, messagebox, filedialog
 from database import models
 from ui.widgets.table import Table
 from ui.widgets.search import SearchBar
+from ui.widgets.tooltip import ToolTip
 from utils.export import export_to_csv
+from config import FONT_FAMILY, CARD_BG, BG_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, FONT_SIZE_MD, FONT_SIZE_XL
 
 
 class SuppliersPage(ttk.Frame):
@@ -13,7 +15,7 @@ class SuppliersPage(ttk.Frame):
 
     def _build_ui(self):
         header = ttk.Label(self, text="Suppliers",
-                           font=("Segoe UI", 20, "bold"))
+                           font=(FONT_FAMILY, 20, "bold"))
         header.pack(anchor="w", padx=20, pady=(20, 10))
 
         toolbar = ttk.Frame(self)
@@ -21,27 +23,62 @@ class SuppliersPage(ttk.Frame):
 
         self.search = SearchBar(toolbar, callback=self._on_search)
         self.search.pack(side=tk.LEFT)
+        ToolTip(self.search.entry, "Search suppliers by name, contact, or address")
 
-        ttk.Button(toolbar, text="Add Supplier",
-                   command=self._add_form).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(toolbar, text="Edit",
-                   command=self._edit_form).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(toolbar, text="Delete",
-                   command=self._delete).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(toolbar, text="Import CSV",
-                   command=self._import_csv).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(toolbar, text="Export CSV",
-                   command=self._export).pack(side=tk.RIGHT, padx=(5, 0))
+        add_btn = ttk.Button(toolbar, text="Add Supplier",
+                   command=self._add_form)
+        add_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(add_btn, "Add a new supplier (Ctrl+N)")
+
+        edit_btn = ttk.Button(toolbar, text="Edit",
+                   command=self._edit_form)
+        edit_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(edit_btn, "Edit selected supplier")
+
+        del_btn = ttk.Button(toolbar, text="Delete",
+                   command=self._delete)
+        del_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(del_btn, "Delete selected supplier")
+
+        imp_btn = ttk.Button(toolbar, text="Import CSV",
+                   command=self._import_csv)
+        imp_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(imp_btn, "Import suppliers from CSV file")
+
+        exp_btn = ttk.Button(toolbar, text="Export CSV",
+                   command=self._export)
+        exp_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(exp_btn, "Export suppliers to CSV file")
+
+        self._container = tk.Frame(self, bg=BG_COLOR)
+        self._container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+
+        self._empty_state = tk.Frame(self._container, bg=BG_COLOR)
+        self._empty_lbl = tk.Label(self._empty_state, text="\uD83D\uDC65",
+                                   font=("Segoe UI Emoji", 48), bg=BG_COLOR, fg="#CCCCCC")
+        self._empty_lbl.pack(pady=(40, 10))
+        tk.Label(self._empty_state, text="No suppliers yet",
+                 font=(FONT_FAMILY, FONT_SIZE_XL, "bold"), bg=BG_COLOR, fg=TEXT_PRIMARY).pack()
+        tk.Label(self._empty_state, text="Click 'Add Supplier' to add one.",
+                 font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
         cols = {"Name": 180, "Contact": 150, "Address": 250, "Created_At": 150}
-        self.table = Table(self, columns=cols, on_double_click=self._edit_form)
-        self.table.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        self.table = Table(self._container, columns=cols, key_column="ID", on_double_click=self._edit_form)
 
         self.refresh()
 
     def refresh(self):
-        data = models.get_suppliers(search=self.search.get())
+        try:
+            data = models.get_suppliers(search=self.search.get())
+        except FileNotFoundError:
+            data = []
         self.table.populate(data)
+        if not data:
+            self.table.pack_forget()
+            self._empty_state.pack(fill=tk.BOTH, expand=True)
+        else:
+            self._empty_state.pack_forget()
+            self.table.pack(fill=tk.BOTH, expand=True)
 
     def _on_search(self, text):
         self.refresh()
@@ -158,7 +195,7 @@ class SuppliersPage(ttk.Frame):
             messagebox.showinfo("Import", f"Imported {count} suppliers")
         except PermissionError as e:
             messagebox.showerror("Update Required", str(e))
-        except Exception as e:
+        except (FileNotFoundError, PermissionError, OSError) as e:
             messagebox.showerror("Import Error", str(e))
 
     def _export(self):

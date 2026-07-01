@@ -3,8 +3,9 @@ from tkinter import ttk
 from config import (
     ACCENT_COLOR, CARD_BG, BG_COLOR, BG_DARK, FONT_FAMILY,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, CARD_BORDER,
-    FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG,
+    FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, PADDING_MD,
 )
+from ui.widgets.tooltip import ToolTip
 
 ALT_ROW_BG = "#F8FAFC"
 LOW_STOCK_BG = "#FEF2F2"
@@ -58,7 +59,7 @@ class Table(ttk.Frame):
         self.info_lbl = ttk.Label(self.nav_frame, text="",
                                   font=(FONT_FAMILY, FONT_SIZE_SM),
                                   foreground=TEXT_SECONDARY)
-        self.info_lbl.pack(side=tk.LEFT, padx=PADDING_MD if 'PADDING_MD' in dir() else 10)
+        self.info_lbl.pack(side=tk.LEFT, padx=PADDING_MD)
 
         btn_frame = ttk.Frame(self.nav_frame)
         btn_frame.pack(side=tk.RIGHT, padx=10)
@@ -66,10 +67,12 @@ class Table(ttk.Frame):
         self.first_btn = ttk.Button(btn_frame, text="\u23EE", width=3,
                                     command=self._first_page)
         self.first_btn.pack(side=tk.LEFT, padx=1)
+        ToolTip(self.first_btn, "First page")
 
         self.prev_btn = ttk.Button(btn_frame, text="\u25C0", width=3,
                                    command=self._prev_page)
         self.prev_btn.pack(side=tk.LEFT, padx=1)
+        ToolTip(self.prev_btn, "Previous page")
 
         self.page_lbl = ttk.Label(btn_frame, text="", font=(FONT_FAMILY, FONT_SIZE_SM))
         self.page_lbl.pack(side=tk.LEFT, padx=8)
@@ -77,10 +80,12 @@ class Table(ttk.Frame):
         self.next_btn = ttk.Button(btn_frame, text="\u25B6", width=3,
                                    command=self._next_page)
         self.next_btn.pack(side=tk.LEFT, padx=1)
+        ToolTip(self.next_btn, "Next page")
 
         self.last_btn = ttk.Button(btn_frame, text="\u23ED", width=3,
                                    command=self._last_page)
         self.last_btn.pack(side=tk.LEFT, padx=1)
+        ToolTip(self.last_btn, "Last page")
 
     def _sort_by(self, col):
         if self._sort_col == col:
@@ -98,7 +103,7 @@ class Table(ttk.Frame):
 
         try:
             self._all_rows.sort(key=sort_key, reverse=self._sort_reverse)
-        except Exception:
+        except (TypeError, ValueError, tk.TclError):
             pass
         self._render_page()
 

@@ -1,4 +1,5 @@
 import tkinter as tk
+from config import FONT_FAMILY
 
 
 class Toast:
@@ -27,7 +28,7 @@ class Toast:
         icon_map = {"success": "\u2713", "error": "\u2717", "warning": "\u26A0", "info": "\u2139"}
         icon = icon_map.get(toast_type, "")
         tk.Label(frame, text=f"{icon}  {message}", bg=bg, fg=fg,
-                 font=("Segoe UI", 10)).pack()
+                 font=(FONT_FAMILY, 10)).pack()
 
         top.update_idletasks()
         w = top.winfo_reqwidth()

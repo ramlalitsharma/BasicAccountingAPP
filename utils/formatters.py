@@ -1,5 +1,15 @@
+def safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def format_currency(amount):
-    return f"₹{amount:,.2f}"
+    try:
+        return f"₹{float(amount):,.2f}"
+    except (ValueError, TypeError):
+        return f"₹0.00"
 
 
 def format_date(date_str):

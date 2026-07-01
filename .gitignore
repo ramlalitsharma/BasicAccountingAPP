@@ -1,7 +1,6 @@
 __pycache__/
 *.pyc
 *.pyo
-*.spec
 build/
 _build/
 _temp/
@@ -22,3 +21,5 @@ config/
 maintest.txt
 modules/
 tests/
+installer/*.exe
+accounting_app/

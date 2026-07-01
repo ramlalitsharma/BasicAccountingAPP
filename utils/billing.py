@@ -18,6 +18,7 @@ def generate_invoice_text(sale_data):
     note = company.get("invoice_note") or "Thank you for your business!"
 
     invoice_id = sale_data.get("invoice_id", f"#{sale_data.get('id', 'N/A')}")
+    receipt_no = sale_data.get("receipt_no", "")
     sale_date = sale_data.get("sale_date", "")
     if sale_date and len(sale_date) >= 10:
         try:
@@ -31,6 +32,10 @@ def generate_invoice_text(sale_data):
     qty = sale_data.get("quantity_sold", 0)
     price = sale_data.get("price", 0)
     total = sale_data.get("total", 0)
+    customer = sale_data.get("customer_name", "Walk-in Customer")
+    payment_status = sale_data.get("payment_status", "paid").capitalize()
+    paid_amt = sale_data.get("paid_amount", total) or 0
+    unpaid_amt = sale_data.get("unpaid_amount", 0) or 0
 
     w = 56
     lines = []
@@ -51,10 +56,14 @@ def generate_invoice_text(sale_data):
     lines.append(" " * 18 + "TAX INVOICE")
     lines.append("-" * w)
     lines.append(f"  Invoice #:    {invoice_id}")
+    if receipt_no:
+        lines.append(f"  Receipt #:    {receipt_no}")
     lines.append(f"  Date:         {sale_date}")
+    lines.append(f"  Customer:     {customer}")
+    lines.append(f"  Payment:      {payment_status}")
     if has_gst:
-        total = sale_data.get("total", 0)
-        taxable = round(total / 1.18, 2) if total else 0
+        total_val = sale_data.get("total", 0)
+        taxable = round(total_val / 1.18, 2) if total_val else 0
         cgst_amt = round(taxable * 0.09, 2)
         sgst_amt = round(taxable * 0.09, 2)
         lines.append(f"  Taxable Amt:  \u20B9{taxable:>8,.2f}")
@@ -68,6 +77,9 @@ def generate_invoice_text(sale_data):
     lines.append(f"  {'Unit Price:':11}\u20B9{price:>8,.2f}")
     lines.append("-" * w)
     lines.append(f"  {'TOTAL AMOUNT:':25}\u20B9{total:>8,.2f}")
+    if payment_status.lower() != "paid":
+        lines.append(f"  {'Paid:':25}\u20B9{paid_amt:>8,.2f}")
+        lines.append(f"  {'Balance:':25}\u20B9{unpaid_amt:>8,.2f}")
     lines.append("=" * w)
     lines.append(f"{note:^{w}}")
     lines.append("=" * w)

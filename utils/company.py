@@ -29,7 +29,7 @@ def load_company():
         for k, v in DEFAULT_COMPANY.items():
             data.setdefault(k, v)
         return data
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return dict(DEFAULT_COMPANY)
 
 

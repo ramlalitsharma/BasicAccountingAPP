@@ -4,9 +4,13 @@ from config import (
     ACCENT_COLOR, ACCENT_LIGHT, FONT_FAMILY, APP_NAME, VERSION,
     USER_DATA_DIR, update_data_dir, TEXT_PRIMARY, TEXT_MUTED,
     FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL, FONT_SIZE_XXL,
+    get_setting, set_setting, CARD_BG, SUCCESS_COLOR,
 )
 from utils.company import load_company, save_company
-from utils.update_checker import get_update_status, RELEASE_BASE_URL
+from utils.update_checker import get_update_status
+from config import RELEASE_BASE_URL
+from database.backup import start_auto_backup, stop_auto_backup
+from utils.license import license_manager, TIERS
 
 
 class SettingsPage(ttk.Frame):
@@ -17,28 +21,30 @@ class SettingsPage(ttk.Frame):
 
     def _build_ui(self):
         header = ttk.Label(self, text="Settings",
-                           font=("Segoe UI", 20, "bold"))
+                           font=(FONT_FAMILY, 20, "bold"))
         header.pack(anchor="w", padx=20, pady=(20, 10))
 
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
+        self._notebook = ttk.Notebook(self)
+        self._notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
 
-        self._general_tab(notebook)
-        self._company_tab(notebook)
-        self._updates_tab(notebook)
+        self._general_tab(self._notebook)
+        self._company_tab(self._notebook)
+        self._backup_tab(self._notebook)
+        self._license_tab(self._notebook)
+        self._updates_tab(self._notebook)
 
     def _general_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
         notebook.add(frame, text="  General  ")
 
         ttk.Label(frame, text="Currency Symbol",
-                  font=("Segoe UI", 11)).grid(row=0, column=0, sticky="w", pady=8)
+                  font=(FONT_FAMILY, 11)).grid(row=0, column=0, sticky="w", pady=8)
         self.currency_var = tk.StringVar(value="\u20B9")
         ttk.Entry(frame, textvariable=self.currency_var, width=10).grid(
             row=0, column=1, sticky="w", padx=10)
 
         ttk.Label(frame, text="Theme",
-                  font=("Segoe UI", 11)).grid(row=1, column=0, sticky="w", pady=8)
+                  font=(FONT_FAMILY, 11)).grid(row=1, column=0, sticky="w", pady=8)
         self.theme_var = tk.StringVar(value="Light")
         ttk.Combobox(frame, textvariable=self.theme_var,
                      values=["Light", "Dark"], state="readonly", width=12).grid(
@@ -49,7 +55,7 @@ class SettingsPage(ttk.Frame):
             row=2, column=0, columnspan=3, sticky="ew", pady=10)
 
         ttk.Label(frame, text="Data Location",
-                  font=("Segoe UI", 11)).grid(row=3, column=0, sticky="nw", pady=8)
+                  font=(FONT_FAMILY, 11)).grid(row=3, column=0, sticky="nw", pady=8)
         self.data_dir_var = tk.StringVar(value=str(USER_DATA_DIR))
         data_entry = ttk.Entry(frame, textvariable=self.data_dir_var, width=45)
         data_entry.grid(row=3, column=1, sticky="w", padx=10)
@@ -60,12 +66,202 @@ class SettingsPage(ttk.Frame):
             row=4, column=0, columnspan=3, sticky="ew", pady=10)
 
         ttk.Label(frame, text="About",
-                  font=("Segoe UI", 11)).grid(row=5, column=0, sticky="w", pady=8)
+                  font=(FONT_FAMILY, 11)).grid(row=5, column=0, sticky="w", pady=8)
         ttk.Label(frame,
                   text=f"{APP_NAME} v{VERSION}\n"
                        "Built with Python & Tkinter\n"
                        "Database: Microsoft Excel (.xlsx)",
                   foreground="#777").grid(row=5, column=1, sticky="w", padx=10)
+
+    def _backup_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Backup  ")
+
+        ttk.Label(frame, text="Automatic Backup",
+                  font=(FONT_FAMILY, 12, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        ttk.Label(frame, text="Backup Interval (minutes):",
+                  font=(FONT_FAMILY, 10)).grid(
+            row=1, column=0, sticky="w", pady=5, padx=(0, 10))
+        self.backup_interval_var = tk.IntVar(value=get_setting("backup_interval_minutes", 30))
+        interval_combo = ttk.Combobox(frame, textvariable=self.backup_interval_var,
+                                       values=[15, 30, 60, 120, 180],
+                                       state="readonly", width=10)
+        interval_combo.grid(row=1, column=1, sticky="w", pady=5)
+        interval_combo.bind("<<ComboboxSelected>>", self._on_backup_interval_change)
+
+        ttk.Label(frame, text="How often to auto-backup data files.\n"
+                              "Recommended: 30 minutes.",
+                  font=(FONT_FAMILY, 9), foreground=TEXT_MUTED).grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=3, column=0, columnspan=2, sticky="ew", pady=10)
+
+        ttk.Label(frame, text="Manual Backup",
+                  font=(FONT_FAMILY, 12, "bold")).grid(
+            row=4, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        def do_manual_backup():
+            from database.backup import create_backup
+            if create_backup():
+                messagebox.showinfo("Backup", "Backup created successfully")
+            else:
+                messagebox.showerror("Backup", "Backup failed")
+
+        ttk.Button(frame, text="\u21BA  Create Backup Now",
+                   command=do_manual_backup).grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=5)
+
+        ttk.Label(frame, text="Creates a timestamped backup of all data files.",
+                  font=(FONT_FAMILY, 9), foreground=TEXT_MUTED).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(0, 5))
+
+    def _on_backup_interval_change(self, event=None):
+        interval = self.backup_interval_var.get()
+        set_setting("backup_interval_minutes", interval)
+        stop_auto_backup()
+        start_auto_backup(interval)
+        self._app.toast.show(f"Backup interval set to {interval} minutes", "success", 3000)
+
+    def _license_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  License  ")
+        self._license_frame = frame
+
+        row = 0
+        ttk.Label(frame, text="License",
+                  font=(FONT_FAMILY, 12, "bold")).grid(
+            row=row, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        row += 1
+
+        ttk.Label(frame, text="Current Plan:",
+                  font=(FONT_FAMILY, 10, "bold")).grid(
+            row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+
+        if license_manager.is_pro():
+            ttk.Label(frame, text=f"  {license_manager.get_tier_name()}  ",
+                      font=(FONT_FAMILY, 10, "bold"),
+                      foreground=SUCCESS_COLOR).grid(
+                row=row, column=1, sticky="w", pady=5)
+        else:
+            ttk.Label(frame, text=f"  {license_manager.get_tier_name()}  ",
+                      font=(FONT_FAMILY, 10, "bold"),
+                      foreground=TEXT_MUTED).grid(
+                row=row, column=1, sticky="w", pady=5)
+        row += 1
+
+        if license_manager.is_pro():
+            ttk.Label(frame, text="Licensed To:",
+                      font=(FONT_FAMILY, 10, "bold")).grid(
+                row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+            ttk.Label(frame, text=license_manager.get_licensed_to(),
+                      font=(FONT_FAMILY, 10)).grid(
+                row=row, column=1, sticky="w", pady=5)
+            row += 1
+
+            ttk.Label(frame, text="Expires:",
+                      font=(FONT_FAMILY, 10, "bold")).grid(
+                row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+            ttk.Label(frame, text=license_manager._license.get("expires", "N/A"),
+                      font=(FONT_FAMILY, 10)).grid(
+                row=row, column=1, sticky="w", pady=5)
+            row += 1
+
+            ttk.Label(frame, text=f"Stock Limit: {TIERS[license_manager.get_tier()]['max_stock_items']:,}",
+                      font=(FONT_FAMILY, 10)).grid(
+                row=row, column=0, columnspan=2, sticky="w", pady=2)
+            row += 1
+
+            features = []
+            if license_manager.has_feature("has_cloud_backup"):
+                features.append("Cloud Backup")
+            if license_manager.has_feature("has_email_invoicing"):
+                features.append("Email Invoicing")
+            if license_manager.has_feature("has_advanced_reports"):
+                features.append("Advanced Reports")
+            if license_manager.has_feature("has_multi_company"):
+                features.append("Multi-Company")
+            if features:
+                ttk.Label(frame, text="Features: " + ", ".join(features),
+                          font=(FONT_FAMILY, 9), foreground=TEXT_MUTED).grid(
+                    row=row, column=0, columnspan=3, sticky="w", pady=2)
+                row += 1
+
+            ttk.Separator(frame, orient="horizontal").grid(
+                row=row, column=0, columnspan=3, sticky="ew", pady=10)
+            row += 1
+
+            ttk.Button(frame, text="Deactivate License",
+                       command=self._deactivate_license).grid(
+                row=row, column=0, sticky="w", pady=5)
+        else:
+            ttk.Label(frame,
+                      text="Upgrade to Professional for unlimited items,\n"
+                           "cloud backup, email invoicing & more!",
+                      font=(FONT_FAMILY, 10),
+                      foreground=TEXT_MUTED).grid(
+                row=row, column=0, columnspan=3, sticky="w", pady=5)
+            row += 1
+            ttk.Button(frame, text="Upgrade to Pro",
+                       command=self._show_license_dialog).grid(
+                row=row, column=0, sticky="w", pady=15)
+
+    def _show_license_dialog(self):
+        body = self._app.show_modal("Activate Pro License", 450, 250)
+
+        tk.Label(body, text="Enter your license key to activate Professional:",
+                 font=(FONT_FAMILY, 10), bg=CARD_BG,
+                 fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 10))
+
+        tk.Label(body, text="License Key:",
+                 font=(FONT_FAMILY, 10, "bold"), bg=CARD_BG,
+                 fg=TEXT_PRIMARY).pack(anchor="w")
+        key_entry = ttk.Entry(body, width=40, font=(FONT_FAMILY, 10))
+        key_entry.pack(fill=tk.X, pady=(2, 10))
+        key_entry.insert(0, "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX")
+
+        tk.Label(body, text="Licensed To (Name):",
+                 font=(FONT_FAMILY, 10, "bold"), bg=CARD_BG,
+                 fg=TEXT_PRIMARY).pack(anchor="w")
+        name_entry = ttk.Entry(body, width=40, font=(FONT_FAMILY, 10))
+        name_entry.pack(fill=tk.X, pady=(2, 10))
+
+        def do_activate():
+            key = key_entry.get().strip()
+            name = name_entry.get().strip()
+            if not key or not name:
+                messagebox.showwarning("Missing Info",
+                                       "Please fill in both fields.")
+                return
+            success, msg = license_manager.activate(key, name)
+            if success:
+                self._app.close_modal()
+                messagebox.showinfo("Success", msg)
+                self._rebuild_license()
+            else:
+                messagebox.showerror("Activation Failed", msg)
+
+        btn_frame = tk.Frame(body, bg=CARD_BG)
+        btn_frame.pack(fill=tk.X, pady=(10, 0))
+        ttk.Button(btn_frame, text="Activate",
+                   command=do_activate).pack(side=tk.LEFT, padx=(0, 5))
+
+    def _deactivate_license(self):
+        if messagebox.askyesno("Deactivate License",
+                               "Are you sure? You will lose Pro features."):
+            license_manager.deactivate()
+            messagebox.showinfo("Deactivated",
+                                "License deactivated successfully.")
+            self._rebuild_license()
+
+    def _rebuild_license(self):
+        for i in range(self._notebook.index("end")):
+            if self._notebook.tab(i, "text") == "  License  ":
+                self._notebook.forget(i)
+                break
+        self._license_tab(self._notebook)
 
     def _updates_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
@@ -73,7 +269,7 @@ class SettingsPage(ttk.Frame):
 
         row = 0
         ttk.Label(frame, text="Update Settings",
-                  font=("Segoe UI", 12, "bold")).grid(
+                  font=(FONT_FAMILY, 12, "bold")).grid(
             row=row, column=0, columnspan=2, sticky="w", pady=(0, 10))
         row += 1
 
@@ -87,10 +283,10 @@ class SettingsPage(ttk.Frame):
         ]
         for label, value in info_items:
             ttk.Label(frame, text=label + ":",
-                      font=("Segoe UI", 10, "bold")).grid(
+                      font=(FONT_FAMILY, 10, "bold")).grid(
                 row=row, column=0, sticky="w", pady=3, padx=(0, 15))
             ttk.Label(frame, text=value,
-                      font=("Segoe UI", 10)).grid(
+                      font=(FONT_FAMILY, 10)).grid(
                 row=row, column=1, sticky="w", pady=3)
             row += 1
 
@@ -119,7 +315,7 @@ class SettingsPage(ttk.Frame):
             row += 1
 
             ttk.Label(frame, text="Update History",
-                      font=("Segoe UI", 11, "bold")).grid(
+                      font=(FONT_FAMILY, 11, "bold")).grid(
                 row=row, column=0, columnspan=2, sticky="w", pady=(0, 5))
             row += 1
 
@@ -168,7 +364,7 @@ class SettingsPage(ttk.Frame):
         self._company_fields = {}
         for i, (label, key, width) in enumerate(fields):
             ttk.Label(frame, text=label,
-                      font=("Segoe UI", 10)).grid(
+                      font=(FONT_FAMILY, 10)).grid(
                 row=i, column=0, sticky="w", pady=4, padx=(0, 10))
             entry = ttk.Entry(frame, width=width)
             entry.insert(0, company.get(key, ""))
@@ -176,7 +372,7 @@ class SettingsPage(ttk.Frame):
             self._company_fields[key] = entry
 
         ttk.Label(frame, text="Invoice Footer Note",
-                  font=("Segoe UI", 10)).grid(
+                  font=(FONT_FAMILY, 10)).grid(
             row=len(fields), column=0, sticky="w", pady=8, padx=(0, 10))
         self.inv_note_text = tk.Text(frame, width=40, height=3,
                                      font=(FONT_FAMILY, 10))

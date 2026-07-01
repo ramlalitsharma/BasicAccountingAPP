@@ -3,7 +3,7 @@ import sys
 import json
 from pathlib import Path
 
-VERSION = "2.5.0"
+VERSION = "2.8.0"
 APP_NAME = "Accounting Pro"
 APP_GEOMETRY = "1280x780"
 APP_MIN_SIZE = "960x640"
@@ -29,6 +29,7 @@ _DEFAULT_SETTINGS = {
     "theme": "Light",
     "currency_symbol": "\u20B9",
     "last_file": "",
+    "log_level": "INFO",
 }
 
 
@@ -41,7 +42,7 @@ def _load_settings():
         for k, v in _DEFAULT_SETTINGS.items():
             data.setdefault(k, v)
         return data
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return dict(_DEFAULT_SETTINGS)
 
 
@@ -86,7 +87,7 @@ os.makedirs(BACKUP_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/ramlalitsharma/BasicAccountingAPP/main/version.json"
-UPDATE_GRACE_DAYS = 15
+RELEASE_BASE_URL = "https://github.com/ramlalitsharma/BasicAccountingAPP/releases"
 
 # Modern professional color palette
 THEME = "clam"

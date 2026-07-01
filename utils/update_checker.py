@@ -2,32 +2,30 @@ import json
 import os
 import logging
 import threading
-import time
-from datetime import datetime, timedelta
-from config import VERSION, CONFIG_DIR, APP_NAME, UPDATE_GRACE_DAYS
+import hashlib
+import subprocess
+import sys
+import urllib.error
+from datetime import datetime
+from config import VERSION, CONFIG_DIR, APP_NAME, UPDATE_CHECK_URL
 
 logger = logging.getLogger(__name__)
 
 UPDATE_FILE = os.path.join(CONFIG_DIR, "update.json")
-
-UPDATE_CHECK_URL = "https://raw.githubusercontent.com/ramlalitsharma/BasicAccountingAPP/main/version.json"
-
-RELEASE_BASE_URL = "https://github.com/ramlalitsharma/BasicAccountingAPP/releases"
-
-GRACE_DAYS = UPDATE_GRACE_DAYS
 AUTO_CHECK_INTERVAL_HOURS = 24
 RETRY_INTERVAL_HOURS = 1
 
 DEFAULT_STATE = {
     "latest_version": "",
+    "min_version": "",
     "download_url": "",
     "changelog": "",
     "release_date": "",
     "file_size_mb": 0,
-    "notified_at": "",
+    "sha256_hash": "",
+    "force_update": False,
     "last_check": "",
     "last_online_check": "",
-    "skipped_version": "",
     "update_history": [],
     "download_progress": 0,
     "downloaded_path": "",
@@ -48,7 +46,7 @@ def _load():
         for k, v in DEFAULT_STATE.items():
             data.setdefault(k, v)
         return data
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return dict(DEFAULT_STATE)
 
 
@@ -56,14 +54,14 @@ def _save(data):
     try:
         with open(UPDATE_FILE, "w") as f:
             json.dump(data, f, indent=2, default=str)
-    except Exception as e:
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as e:
         logger.warning(f"Failed to save update state: {e}")
 
 
 def _parse_version(v):
     try:
         return tuple(int(x) for x in str(v).split("."))
-    except Exception:
+    except (ValueError, TypeError):
         return (0, 0, 0)
 
 
@@ -72,7 +70,7 @@ def _is_online():
         import urllib.request
         urllib.request.urlopen("https://raw.githubusercontent.com", timeout=5)
         return True
-    except Exception:
+    except (urllib.error.URLError, OSError):
         return False
 
 
@@ -121,11 +119,20 @@ def _fetch_version_info():
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         state = _load()
-        state["last_check"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        state["last_online_check"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        state["last_check"] = now_str
+        state["last_online_check"] = now_str
+        state["latest_version"] = data.get("latest_version", "")
+        state["min_version"] = data.get("min_version", "")
+        state["force_update"] = data.get("force_update", False)
+        state["download_url"] = data.get("download_url", "")
+        state["changelog"] = data.get("changelog", "")
+        state["release_date"] = data.get("release_date", "")
+        state["file_size_mb"] = data.get("file_size_mb", 0)
+        state["sha256_hash"] = data.get("sha256_hash", "")
         _save(state)
         return data
-    except Exception as e:
+    except (json.JSONDecodeError, OSError) as e:
         logger.debug(f"Update check failed: {e}")
         return None
 
@@ -134,41 +141,48 @@ def get_latest_version():
     return LATEST_KNOWN or _load().get("latest_version", "")
 
 
-def is_update_available(skip_skipped=True):
+def is_update_available():
     latest = get_latest_version()
     if not latest:
         return False
     try:
         current = _parse_version(VERSION)
         remote = _parse_version(latest)
-        if remote <= current:
-            return False
-        if skip_skipped:
-            skipped = _load().get("skipped_version", "")
-            if skipped and _parse_version(skipped) >= remote:
-                return False
-        return True
-    except Exception:
+        return remote > current
+    except (OSError, PermissionError):
         return False
+
+
+def is_mandatory_update():
+    state = _load()
+    min_ver = state.get("min_version", "")
+    if not min_ver:
+        return False
+    try:
+        return _parse_version(VERSION) < _parse_version(min_ver)
+    except (ValueError, TypeError):
+        return False
+
+
+def is_server_force_update():
+    return _load().get("force_update", False)
+
+
+def must_update_now():
+    if not is_update_available():
+        return False
+    if is_mandatory_update():
+        return True
+    if is_server_force_update():
+        return True
+    return False
 
 
 def get_update_status():
     state = _load()
     latest = get_latest_version()
     available = is_update_available()
-
-    notified_at = state.get("notified_at", "")
-    days_remaining = GRACE_DAYS
-    force_update = False
-
-    if available and notified_at:
-        try:
-            notified = datetime.strptime(notified_at, "%Y-%m-%d")
-            elapsed = (datetime.now() - notified).days
-            days_remaining = max(0, GRACE_DAYS - elapsed)
-            force_update = elapsed >= GRACE_DAYS
-        except ValueError:
-            pass
+    mandatory = must_update_now()
 
     last_check_str = state.get("last_check", "")
     last_online = state.get("last_online_check", "")
@@ -180,34 +194,21 @@ def get_update_status():
 
     return {
         "available": available,
+        "mandatory": mandatory,
         "latest_version": latest,
         "current_version": VERSION,
+        "min_version": state.get("min_version", ""),
         "download_url": state.get("download_url", ""),
         "changelog": state.get("changelog", ""),
         "release_date": state.get("release_date", ""),
         "file_size_mb": state.get("file_size_mb", 0),
-        "days_remaining": days_remaining,
-        "force_update": force_update,
-        "notified_at": notified_at,
+        "sha256_hash": state.get("sha256_hash", ""),
+        "server_force_update": state.get("force_update", False),
         "last_check": last_check_str,
         "last_online_check": last_online,
         "is_online_now": is_online,
-        "skipped_version": state.get("skipped_version", ""),
         "downloaded_path": state.get("downloaded_path", ""),
     }
-
-
-def mark_notified():
-    state = _load()
-    state["notified_at"] = datetime.now().strftime("%Y-%m-%d")
-    _save(state)
-
-
-def skip_version(version):
-    state = _load()
-    state["skipped_version"] = version
-    _save(state)
-    logger.info(f"Skipped update v{version}")
 
 
 def mark_update_downloaded(filepath):
@@ -216,13 +217,15 @@ def mark_update_downloaded(filepath):
     _save(state)
 
 
-def update_available_info(latest_version, download_url="", changelog="", release_date="", file_size_mb=0):
+def update_available_info(latest_version, download_url="", changelog="",
+                          release_date="", file_size_mb=0, sha256_hash=""):
     state = _load()
     state["latest_version"] = latest_version
     state["download_url"] = download_url
     state["changelog"] = changelog
     state["release_date"] = release_date
     state["file_size_mb"] = file_size_mb
+    state["sha256_hash"] = sha256_hash
     state["downloaded_path"] = ""
     _save(state)
     global LATEST_KNOWN
@@ -253,7 +256,7 @@ def needs_auto_check():
         if is_update_available():
             return False
         return hours_since >= RETRY_INTERVAL_HOURS
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return True
 
 
@@ -296,10 +299,79 @@ def download_update_async(download_url, callback=None):
             mark_update_downloaded(temp_path)
             if callback:
                 callback({"success": True, "path": temp_path})
-        except Exception as e:
-            logger.error(f"Download failed: {e}")
+        except (FileNotFoundError, OSError) as e:
+            logger.exception("Download failed")
             if callback:
                 callback({"success": False, "error": str(e)})
 
     thread = threading.Thread(target=_download, daemon=True)
     thread.start()
+
+
+def verify_download(filepath, expected_hash):
+    if not expected_hash:
+        return True
+    try:
+        h = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        result = h.hexdigest()
+        if result != expected_hash:
+            logger.error(f"Hash mismatch: expected={expected_hash} got={result}")
+            return False
+        return True
+    except (FileNotFoundError, OSError) as e:
+        logger.error(f"Hash verification failed: {e}")
+        return False
+
+
+def install_update(filepath):
+    logger.info(f"Launching update installer: {filepath}")
+    try:
+        old_exe = sys.executable if getattr(sys, "frozen", False) else None
+        if old_exe:
+            bat_path = os.path.join(CONFIG_DIR, "_update_launcher.bat")
+            with open(bat_path, "w") as bat:
+                bat.write('@echo off\n')
+                bat.write('echo Updating Accounting Pro...\n')
+                bat.write('timeout /t 3 /nobreak >nul\n')
+                bat.write(f'taskkill /f /im "{os.path.basename(old_exe)}" 2>nul\n')
+                bat.write('timeout /t 2 /nobreak >nul\n')
+                bat.write(f'start "" "{filepath}"\n')
+                bat.write(f'del "%~f0"\n')
+            subprocess.Popen(
+                f'cmd /c "{bat_path}"',
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                close_fds=True,
+            )
+        else:
+            os.startfile(filepath)
+    except OSError as e:
+        logger.error(f"Failed to launch update: {e}")
+
+
+def auto_update_on_launch():
+    state = _load()
+    downloaded = state.get("downloaded_path", "")
+    if not downloaded or not os.path.exists(downloaded):
+        return False
+
+    latest = state.get("latest_version", "")
+    if not is_update_available():
+        return False
+
+    expected_hash = state.get("sha256_hash", "")
+    if not verify_download(downloaded, expected_hash):
+        logger.warning("Downloaded update failed hash verification, re-downloading")
+        try:
+            os.remove(downloaded)
+        except OSError:
+            pass
+        state["downloaded_path"] = ""
+        _save(state)
+        return False
+
+    logger.info(f"Auto-installing cached update: {downloaded}")
+    install_update(downloaded)
+    return True
