@@ -13,6 +13,7 @@ config/
 *.xlsx
 *.log
 *.exe
+*.pfx
 *.dat
 *.txt
 !LICENSE.txt

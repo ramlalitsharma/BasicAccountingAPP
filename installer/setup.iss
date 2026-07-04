@@ -26,7 +26,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=commandline
+PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
 ShowLanguageDialog=no
@@ -79,56 +79,43 @@ end;
 procedure DownloadAndInstallVCRedist;
 var
   TmpFile: String;
-  Script: String;
   ResultCode: Integer;
 begin
   TmpFile := ExpandConstant('{tmp}\vc_redist.x64.exe');
-  Script := ExpandConstant('{tmp}\dl_vc.ps1');
+  Log('Downloading Visual C++ Redistributable...');
 
-  SaveStringToFile(Script,
-    'try {' #13#10 +
-    '  $wc = New-Object Net.WebClient' #13#10 +
-    '  Write-Host "Downloading Visual C++ Redistributable..."' #13#10 +
-    '  $wc.DownloadFile(''https://aka.ms/vs/17/release/vc_redist.x64.exe'', ''' + TmpFile + ''')' #13#10 +
-    '  exit 0' #13#10 +
-    '} catch { exit 1 }',
-    False);
-
-  if Exec('powershell.exe', '-ExecutionPolicy Bypass -File "' + Script + '"', '',
-          SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+  if Exec('powershell.exe',
+    '-ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; ' +
+    '$wc = New-Object Net.WebClient; ' +
+    '$wc.DownloadFile(''https://aka.ms/vs/17/release/vc_redist.x64.exe'', ''' + TmpFile + '''); ' +
+    'exit 0 } catch { exit 1 }"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
   begin
-    if Exec(TmpFile, '/install /quiet /norestart', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-      Log('VC++ Redistributable installed successfully')
+    if Exec(TmpFile, '/install /quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      Log('VC++ Redistributable installed successfully (code: ' + IntToStr(ResultCode) + ')')
     else
-      MsgBox('Installation failed (code: ' + IntToStr(ResultCode) + '). Please install manually.', mbError, MB_OK);
+      Log('VC++ Redistributable install failed with code: ' + IntToStr(ResultCode));
   end
   else
-    MsgBox('Download failed. Please check your connection and install manually.', mbError, MB_OK);
+    Log('VC++ Redistributable download failed');
 end;
 
 function InitializeSetup: Boolean;
 var
-  Answer: Integer;
   ResultCode: Integer;
 begin
   Result := True;
 
-  // Silently close any running AccountingPro instances
+  // Kill any running AccountingPro instances silently
   Exec('taskkill.exe', '/f /im AccountingPro.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
   if not VC_RedistInstalled then
   begin
-    Answer := MsgBox(
-      '{#MyAppName} requires Microsoft Visual C++ Redistributable (x64) for Visual Studio 2015-2022.' #13#13 +
-      'Download and install it now? (Recommended)',
-      mbConfirmation, MB_YESNO);
-
-    if Answer = IDYES then
-      DownloadAndInstallVCRedist
-    else
-      MsgBox(
-        '{#MyAppName} may not run correctly without the Visual C++ Redistributable.' #13#13 +
-        'You can install it later from: https://aka.ms/vs/17/release/vc_redist.x64.exe',
-        mbInformation, MB_OK);
+    Log('VC++ Redistributable not found, installing silently...');
+    DownloadAndInstallVCRedist;
+  end
+  else
+  begin
+    Log('VC++ Redistributable already installed, skipping');
   end;
 end;

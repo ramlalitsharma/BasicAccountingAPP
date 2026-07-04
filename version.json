@@ -3,8 +3,8 @@
   "min_version": "2.8.0",
   "force_update": false,
   "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.8.0/AccountingPro_Setup_v2.8.0.exe",
-  "changelog": "v2.8.0 - Professional dashboard, mandatory auto-update, HMAC license system, thread-safe DB, pending payments popup, CSV injection fix, crash handling, Inno Setup installer with VC++ auto-download",
+  "changelog": "v2.8.0 - Professional dashboard, mandatory auto-update, HMAC license system, thread-safe DB, pending payments popup, CSV injection fix, crash handling, Inno Setup installer with VC++ auto-download, signed EXE",
   "release_date": "2026-07-04",
   "file_size_mb": 39.8,
-  "sha256_hash": "25A08AFACEDC65128F1FCB907F043D8EFCA839E3CEAF633C1942EF230876AF0E"
+  "sha256_hash": "F9E2D8B51E2198882300EB01339BE8DB37995E247AE3E80B9B4C3678CE710AC3"
 }
