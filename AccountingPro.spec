@@ -1,8 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os, sys
+
 block_cipher = None
 
 datas = [('config.py', '.'), ('database', 'database'), ('ui', 'ui'), ('utils', 'utils'), ('icon', 'icon')]
+
 binaries = []
 hiddenimports = [
     'openpyxl', 'openpyxl.cell._writer', 'openpyxl.styles',
@@ -10,8 +13,7 @@ hiddenimports = [
     'matplotlib', 'matplotlib.backends.backend_tkagg',
     'matplotlib.figure', 'matplotlib.backends.backend_agg',
     'matplotlib.backends.backend_pdf',
-    'kiwisolver', 'numpy', 'numpy._core', 'numpy._core.overrides', 'numpy._core.multiarray',
-    'PIL', 'PIL.ImageTk',
+    'kiwisolver', 'numpy', 'PIL', 'PIL.ImageTk',
     'hashlib', 'hmac', 'base64',
 ]
 
