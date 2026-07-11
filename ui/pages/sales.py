@@ -444,19 +444,18 @@ class SalesPage(ttk.Frame):
             messagebox.showwarning("No Selection", "Select a sale to print")
             return
         values = sel["values"]
-        invoice_id = values[0] if values else f"#{sel['key']}"
         sale_data = {
             "id": sel["key"],
-            "invoice_id": invoice_id,
-            "item_name": values[1],
-            "category": values[2],
-            "customer": values[3] if len(values) > 3 else "Walk-in Customer",
+            "invoice_id": values[0] if values else f"#{sel['key']}",
+            "item_name": values[1] if len(values) > 1 else "",
+            "category": values[2] if len(values) > 2 else "",
+            "customer_name": values[3] if len(values) > 3 else "Walk-in Customer",
             "quantity_sold": values[4] if len(values) > 4 else 0,
             "price": values[5] if len(values) > 5 else 0,
             "total": values[6] if len(values) > 6 else 0,
             "payment_status": values[7] if len(values) > 7 else "Paid",
-            "paid": values[8] if len(values) > 8 else 0,
-            "unpaid": values[9] if len(values) > 9 else 0,
+            "paid_amount": values[8] if len(values) > 8 else 0,
+            "unpaid_amount": values[9] if len(values) > 9 else 0,
             "sale_date": values[10] if len(values) > 10 else "",
         }
         print_bill(sale_data)

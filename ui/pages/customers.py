@@ -202,7 +202,7 @@ class CustomersPage(ttk.Frame):
             messagebox.showinfo("Import", f"Imported {count} customers")
         except PermissionError as e:
             messagebox.showerror("Update Required", str(e))
-        except (FileNotFoundError, PermissionError, OSError) as e:
+        except (FileNotFoundError, PermissionError, OSError, ValueError) as e:
             messagebox.showerror("Import Error", str(e))
 
     def _export(self):

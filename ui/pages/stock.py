@@ -321,21 +321,44 @@ class StockPage(ttk.Frame):
             with open(path, "r", encoding="utf-8-sig") as f:
                 reader = csv.DictReader(f)
                 count = 0
-                for row in reader:
+                errors = []
+                for i, row in enumerate(reader, start=2):
+                    try:
+                        qty = int(row.get("Quantity", 0))
+                    except (ValueError, TypeError):
+                        errors.append(f"Row {i}: invalid Quantity '{row.get('Quantity', '')}'")
+                        continue
+                    try:
+                        pp = float(row.get("Purchase_Price", 0))
+                    except (ValueError, TypeError):
+                        errors.append(f"Row {i}: invalid Purchase_Price '{row.get('Purchase_Price', '')}'")
+                        continue
+                    try:
+                        sp = float(row.get("Selling_Price", 0))
+                    except (ValueError, TypeError):
+                        errors.append(f"Row {i}: invalid Selling_Price '{row.get('Selling_Price', '')}'")
+                        continue
+                    try:
+                        mq = int(row.get("Min_Quantity", 5))
+                    except (ValueError, TypeError):
+                        errors.append(f"Row {i}: invalid Min_Quantity '{row.get('Min_Quantity', '')}'")
+                        continue
                     models.add_stock_item(
                         row.get("Item_Name", row.get("Item", "")),
                         row.get("Category", ""),
-                        int(row.get("Quantity", 0)),
-                        float(row.get("Purchase_Price", 0)),
-                        float(row.get("Selling_Price", 0)),
-                        int(row.get("Min_Quantity", 5)),
+                        qty, pp, sp, mq,
                     )
                     count += 1
             self.refresh()
-            messagebox.showinfo("Import", f"Imported {count} items")
+            msg = f"Imported {count} items"
+            if errors:
+                msg += "\n\nSkipped rows:\n" + "\n".join(errors[:10])
+                if len(errors) > 10:
+                    msg += f"\n... and {len(errors)-10} more"
+            messagebox.showinfo("Import", msg)
         except PermissionError as e:
             messagebox.showerror("Update Required", str(e))
-        except (FileNotFoundError, PermissionError, OSError) as e:
+        except (FileNotFoundError, PermissionError, OSError, ValueError) as e:
             messagebox.showerror("Import Error", str(e))
 
     def _show_log(self):

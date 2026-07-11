@@ -20,6 +20,12 @@ SHEET_VERSION = "2.0"
 _UPDATE_CACHE = {"time": 0, "mandatory": False}
 
 
+def _sanitize(value):
+    if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
 def _num(v, default=0.0):
     try:
         return float(v)
@@ -226,7 +232,7 @@ def _dicts_to_sheet(ws, dicts, headers):
             cell.value = None
     ws.delete_rows(2, ws.max_row - 1)
     for d in dicts:
-        ws.append([d.get(h, "") for h in headers])
+        ws.append([_sanitize(d.get(h, "")) for h in headers])
 
 
 def _now():
