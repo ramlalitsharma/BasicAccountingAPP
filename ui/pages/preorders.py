@@ -72,11 +72,12 @@ class PreordersPage(ttk.Frame):
         tk.Label(self._empty_state, text="Click 'New Preorder' to create one.",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
-        cols = {"Order ID": 70, "Customer": 140, "Item": 150,
-                "Qty": 60, "Price": 80, "Total": 90,
-                "Delivery": 90, "Status": 90, "Date": 140}
+        cols = {"Order ID": 80, "Customer": 150, "Item": 170,
+                "Qty": 65, "Price": 85, "Total": 95,
+                "Delivery": 95, "Status": 95, "Date": 150}
+        aligns = {"Qty": "e", "Price": "e", "Total": "e"}
         self.table = Table(self._container, columns=cols, key_column="ID",
-                           on_double_click=self._edit_form)
+                           on_double_click=self._edit_form, alignments=aligns)
 
         self.refresh()
 

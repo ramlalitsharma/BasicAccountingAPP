@@ -73,10 +73,11 @@ class ExtraIncomePage(ttk.Frame):
         tk.Label(self._empty_state, text="Click 'Add Income' to record extra earnings.",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
-        cols = {"Source": 160, "Description": 200, "Amount": 100,
-                "Category": 120, "Method": 100, "Ref No": 120, "Date": 150}
+        cols = {"Source": 170, "Description": 210, "Amount": 110,
+                "Category": 130, "Method": 110, "Ref No": 130, "Date": 160}
+        aligns = {"Amount": "e"}
         self.table = Table(self._container, columns=cols, key_column="ID",
-                           on_double_click=self._edit_form)
+                           on_double_click=self._edit_form, alignments=aligns)
 
         self.refresh()
 
@@ -114,7 +115,7 @@ class ExtraIncomePage(ttk.Frame):
 
     def _add_form(self):
         app = self.winfo_toplevel()
-        body = app.show_modal("Add Extra Income", width=450, height=320)
+        body = app.show_modal("Add Extra Income", width=450, height=400)
 
         fields = {}
         labels = [("Source", "Source"), ("Description", "Description"),

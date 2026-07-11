@@ -69,7 +69,7 @@ class CustomersPage(ttk.Frame):
         tk.Label(self._empty_state, text="Click 'Add Customer' to add one.",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
-        cols = {"Name": 180, "Contact": 150, "Address": 250, "Created_At": 150}
+        cols = {"Name": 200, "Contact": 160, "Address": 260, "Created_At": 160}
         self.table = Table(self._container, columns=cols, key_column="ID", on_double_click=self._view_profile)
 
         self.refresh()

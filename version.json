@@ -1,10 +1,10 @@
 {
-  "latest_version": "2.8.0",
+  "latest_version": "2.9.0",
   "min_version": "2.8.0",
   "force_update": false,
-  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.8.0/AccountingPro_Setup_v2.8.0.exe",
-  "changelog": "v2.8.0 - Fix: Dark mode theme system (dynamic colors, full recolor), Fix: Preorder address/advance payment fields, Fix: Complete preorder transfers advance to sale paid amount, Fix: Sales search includes customer names, Fix: record_sale @synchronized, Fix: Settings theme toggle reapplies all styles + reloads page, Fix: Sidebar hover colors dynamic",
+  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.9.0/AccountingPro_Setup_v2.9.0.exe",
+  "changelog": "v2.9.0 - Fix: Purchase items delete + multi-delete support, Fix: Customer delete (removed reference check), Fix: Extra Income save button visibility, Fix: Stock supplier combobox readonly, Fix: Table data alignment & dark mode row colors, Fix: _validate_sheets header corruption, Fix: Sales modal height, New: Horizontal grid lines between table sections, New: Dashboard Total Items card clickable",
   "release_date": "2026-07-11",
   "file_size_mb": 41.7,
-  "sha256_hash": "a89eccf4e376c3cc614616adcfdbd272c61385692d592f23c9ed31f490b5cc74"
+  "sha256_hash": "05106a1bf26ebbb4535d588d76bdb661c25f8b1fc8024129c0a3f359f16ad9bb"
 }

@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 chcp 65001 >nul
 
-set VERSION=2.8.0
+set VERSION=2.9.0
 set APP_NAME=AccountingPro
 set DIST_DIR=dist
 set INSTALLER_DIR=installer

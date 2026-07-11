@@ -25,6 +25,11 @@ class PurchasesPage(ttk.Frame):
         self.search.pack(side=tk.LEFT)
         ToolTip(self.search.entry, "Search purchases by item or supplier")
 
+        del_btn = ttk.Button(toolbar, text="Delete",
+                   command=self._delete)
+        del_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(del_btn, "Delete selected purchase(s)")
+
         add_btn = ttk.Button(toolbar, text="New Purchase",
                    command=self._add_form)
         add_btn.pack(side=tk.RIGHT, padx=(5, 0))
@@ -47,9 +52,10 @@ class PurchasesPage(ttk.Frame):
         tk.Label(self._empty_state, text="Click 'New Purchase' to record your first order.",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
-        cols = {"Item": 160, "Supplier": 150, "Qty": 70, "Cost": 90,
-                "Total": 100, "Date": 150}
-        self.table = Table(self._container, columns=cols, key_column="ID")
+        cols = {"Item": 180, "Supplier": 160, "Qty": 75, "Cost": 95,
+                "Total": 110, "Date": 160}
+        aligns = {"Qty": "e", "Cost": "e", "Total": "e"}
+        self.table = Table(self._container, columns=cols, key_column="ID", alignments=aligns)
 
         self.refresh()
 
@@ -148,6 +154,28 @@ class PurchasesPage(ttk.Frame):
         ttk.Button(body, text="Record Purchase", command=save).grid(
             row=4, column=0, columnspan=2, pady=15)
         body.grid_columnconfigure(1, weight=1)
+
+    def _delete(self):
+        sel_keys = self.table.get_selected_keys()
+        if not sel_keys:
+            messagebox.showwarning("No Selection", "Select purchase(s) to delete")
+            return
+        msg = f"Delete {len(sel_keys)} purchase record(s)?" if len(sel_keys) > 1 else "Delete this purchase record?"
+        if not messagebox.askyesno("Confirm", msg):
+            return
+        failed = 0
+        for pid in sel_keys:
+            try:
+                models.delete_purchase(pid)
+            except Exception as e:
+                failed += 1
+        self.refresh()
+        if failed == 0:
+            messagebox.showinfo("Success", f"{len(sel_keys)} purchase(s) deleted")
+        elif failed < len(sel_keys):
+            messagebox.showwarning("Partial", f"{len(sel_keys)-failed} deleted, {failed} failed")
+        else:
+            messagebox.showerror("Error", "Failed to delete purchases")
 
     def _export(self):
         data = models.get_purchases()

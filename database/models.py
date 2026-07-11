@@ -7,7 +7,7 @@ from database.excel_db import (
     get_monthly_report, get_yearly_report, get_dashboard_stats,
     get_stock_log, get_year_months, format_invoice_id,
     add_customer, get_customers, get_customer, update_customer, delete_customer,
-    record_purchase, get_purchases,
+    record_purchase, get_purchases, delete_purchase,
     add_extra_income, get_extra_income, update_extra_income, delete_extra_income,
     get_extra_income_summary, update_sale_payment,
     add_preorder, get_preorders, get_preorder, update_preorder,

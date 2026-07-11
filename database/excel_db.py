@@ -7,6 +7,7 @@ import shutil
 import threading
 import functools
 import logging
+import time as _time
 from datetime import datetime
 from config import DATA_DIR, BACKUP_DIR, set_setting
 from utils.update_checker import get_update_status
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 _WB_LOCK = threading.Lock()
 _active_file = None
 SHEET_VERSION = "2.0"
+_UPDATE_CACHE = {"time": 0, "mandatory": False}
 
 
 def _num(v, default=0.0):
@@ -34,12 +36,26 @@ def synchronized(func):
 
 
 def _check_write_lock():
-    status = get_update_status()
-    if status.get("mandatory", False):
-        raise PermissionError(
-            f"Update Required: v{status['latest_version']} is now available.\n"
-            "A mandatory update is pending. Please restart the application to update."
-        )
+    global _UPDATE_CACHE
+    now = _time.time()
+    if now - _UPDATE_CACHE["time"] < 300:
+        if _UPDATE_CACHE["mandatory"]:
+            raise PermissionError(
+                "Update Required: A mandatory update is pending. Please restart the application to update."
+            )
+        return
+    try:
+        status = get_update_status()
+        _UPDATE_CACHE["time"] = now
+        _UPDATE_CACHE["mandatory"] = status.get("mandatory", False)
+        if status.get("mandatory", False):
+            raise PermissionError(
+                f"Update Required: v{status['latest_version']} is now available.\n"
+                "A mandatory update is pending. Please restart the application to update."
+            )
+    except Exception:
+        _UPDATE_CACHE["time"] = now
+        _UPDATE_CACHE["mandatory"] = False
 
 SHEETS = {
     "Suppliers": ["ID", "Name", "Contact", "Address", "Created_At"],
@@ -113,10 +129,10 @@ def _validate_sheets(wb):
             else:
                 for expected in headers:
                     if expected not in actual:
-                        missing_idx = headers.index(expected)
-                        col_letter = get_column_letter(missing_idx + 1)
+                        max_col = ws.max_column or len(actual)
+                        col_letter = get_column_letter(max_col + 1)
                         ws[f"{col_letter}1"] = expected
-                        issues.append(f"Fixed missing column '{expected}' in {name}")
+                        issues.append(f"Appended missing column '{expected}' to {name}")
     return issues
 
 
@@ -192,12 +208,15 @@ def _close_wb(wb):
         pass
 
 
-def _sheet_to_dicts(ws):
-    headers = [cell.value for cell in ws[1]]
+def _sheet_to_dicts(ws, schema=None):
+    if schema is None:
+        schema = SHEETS.get(ws.title)
+    if schema is None:
+        schema = [cell.value for cell in ws[1]]
     rows = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         if any(v is not None for v in row):
-            rows.append(dict(zip(headers, row)))
+            rows.append(dict(zip(schema, row)))
     return rows
 
 
@@ -318,6 +337,7 @@ def add_stock_item(item_name, category, quantity, purchase_price, selling_price,
         sid = _next_id(ws)
         ws.append([sid, item_name, category, quantity, min_quantity,
                    purchase_price, selling_price, supplier_id, _now()])
+        _log_stock_change_internal(wb, sid, "add", quantity, 0, f"Added {quantity} units")
         _save_and_close(wb)
         return sid
     except Exception:
@@ -426,7 +446,6 @@ def get_categories():
 
 # ---- SALES ----
 
-@synchronized
 @synchronized
 def record_sale(stock_id, quantity_sold, price, customer_id=None, 
                 payment_status="paid", paid_amount=None, unpaid_amount=None):
@@ -814,23 +833,6 @@ def delete_customer(customer_id):
     _check_write_lock()
     wb = _get_wb()
     try:
-        sales_sheet = wb["Sales"] if "Sales" in wb.sheetnames else None
-        preorders_sheet = wb["Preorders"] if "Preorders" in wb.sheetnames else None
-        sales_data = _sheet_to_dicts(sales_sheet) if sales_sheet else []
-        preorder_data = _sheet_to_dicts(preorders_sheet) if preorders_sheet else []
-        sale_refs = [s for s in sales_data if s.get("Customer_ID") == customer_id]
-        pre_refs = [p for p in preorder_data if p.get("Customer_ID") == customer_id]
-        total_refs = len(sale_refs) + len(pre_refs)
-        if total_refs > 0:
-            details = []
-            if sale_refs:
-                details.append(f"{len(sale_refs)} sale(s)")
-            if pre_refs:
-                details.append(f"{len(pre_refs)} preorder(s)")
-            raise ValueError(
-                f"Cannot delete: customer is referenced by {' and '.join(details)}. "
-                f"Delete those records first."
-            )
         ws = wb["Customers"]
         data = _sheet_to_dicts(ws)
         data = [r for r in data if r.get("ID") != customer_id]
@@ -888,6 +890,21 @@ def get_purchases(search=""):
             continue
         result.append(r)
     return result
+
+
+@synchronized
+def delete_purchase(purchase_id):
+    _check_write_lock()
+    wb = _get_wb()
+    try:
+        ws = wb["Purchases"]
+        data = _sheet_to_dicts(ws)
+        data = [r for r in data if r.get("ID") != purchase_id]
+        _dicts_to_sheet(ws, data, SHEETS["Purchases"])
+        _save_and_close(wb)
+    except Exception:
+        _close_wb(wb)
+        raise
 
 
 # ---- INVOICE FORMAT ----

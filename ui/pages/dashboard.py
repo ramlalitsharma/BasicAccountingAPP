@@ -154,8 +154,12 @@ class DashboardPage(ttk.Frame):
         cards_grid = tk.Frame(cf, bg=BG_COLOR)
         cards_grid.pack(fill=tk.X, padx=PADDING_LG, pady=(0, 10))
 
+        click_map = {
+            "total_items": self._show_all_items,
+            "total_pending": self._show_pending_customers,
+        }
         for i, (label, key, icon, color, card_bg) in enumerate(cards_data):
-            on_click = self._show_pending_customers if key == "total_pending" else None
+            on_click = click_map.get(key)
             card = MetricCard(cards_grid, label, icon, color, card_bg, on_click=on_click)
             card.grid(row=i // 4, column=i % 4, padx=5, pady=5, sticky="nsew")
             self._cards[key] = card
@@ -473,3 +477,43 @@ class DashboardPage(ttk.Frame):
         tk.Label(body, text=f"Total Pending: {format_currency(total_pending)}",
                  font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
                  bg=CARD_BG, fg=DANGER_COLOR).pack(anchor="w", pady=(8, 0))
+
+    def _show_all_items(self):
+        try:
+            items = models.get_stock_items()
+        except FileNotFoundError:
+            messagebox.showinfo("Stock Items", "No data available")
+            return
+
+        app = self.winfo_toplevel()
+        body = app.show_modal("All Stock Items", width=800, height=500)
+
+        cols = ("name", "category", "quantity", "min_qty", "purchase_price", "selling_price")
+        tree = ttk.Treeview(body, columns=cols, show="headings", height=20)
+        tree.heading("name", text="Item Name")
+        tree.heading("category", text="Category")
+        tree.heading("quantity", text="Qty")
+        tree.heading("min_qty", text="Min Qty")
+        tree.heading("purchase_price", text="Purchase Price")
+        tree.heading("selling_price", text="Selling Price")
+        tree.column("name", width=180, anchor="w")
+        tree.column("category", width=120, anchor="w")
+        tree.column("quantity", width=70, anchor="e")
+        tree.column("min_qty", width=70, anchor="e")
+        tree.column("purchase_price", width=110, anchor="e")
+        tree.column("selling_price", width=110, anchor="e")
+
+        scroll = ttk.Scrollbar(body, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for item in items:
+            tree.insert("", tk.END, values=(
+                item.get("Item_Name", ""),
+                item.get("Category", ""),
+                item.get("Quantity", 0),
+                item.get("Min_Quantity", 0),
+                format_currency(item.get("Purchase_Price", 0)),
+                format_currency(item.get("Selling_Price", 0)),
+            ))

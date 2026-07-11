@@ -471,9 +471,27 @@ class AccountingApp(tk.Tk):
         style.map("TButton", background=[("active", accent_light), ("pressed", accent_dark)], foreground=[("active", "white")])
         style.configure("Secondary.TButton", background=text_secondary)
         style.map("Secondary.TButton", background=[("active", text_muted)])
-        style.configure("Treeview", background=card_bg, foreground=text_primary, fieldbackground=card_bg, rowheight=32, borderwidth=0)
-        style.configure("Treeview.Heading", font=(FONT_FAMILY, FONT_SIZE_MD, "bold"), background=accent, foreground="white", relief="flat", borderwidth=0)
+        style.configure("Treeview", background=border_color, foreground=text_primary,
+                        fieldbackground=card_bg, rowheight=32, borderwidth=1, relief="solid")
+        style.map("Treeview", background=[("selected", accent_dark)], foreground=[("selected", "white")])
+        style.map("Treeview", fieldbackground=[("selected", accent_dark)])
+        style.configure("Treeview.Heading", font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
+                        background=accent, foreground="white", relief="solid", borderwidth=2)
         style.map("Treeview.Heading", background=[("active", accent_light)])
+        style.layout("Treeview.Heading", [
+            ("Treeheading.cell", {"sticky": "nswe", "children": [
+                ("Treeheading.border", {"sticky": "nswe", "children": [
+                    ("Treeheading.padding", {"sticky": "nswe", "children": [
+                        ("Treeheading.label", {"sticky": "nswe"})
+                    ]})
+                ]})
+            ]})
+        ])
+        style.layout("Treeview", [
+            ("Treeview.field", {"sticky": "nswe", "children": [
+                ("Treeview.treearea", {"sticky": "nswe"})
+            ]})
+        ])
         style.configure("TEntry", padding=6, fieldbackground=card_bg, foreground=text_primary, borderwidth=1)
         style.map("TEntry", fieldbackground=[("focus", card_bg)])
         style.configure("TCombobox", padding=4, fieldbackground=card_bg, foreground=text_primary)

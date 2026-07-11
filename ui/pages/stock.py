@@ -81,10 +81,11 @@ class StockPage(ttk.Frame):
         tk.Label(self._empty_state, text="Click 'Add Item' to add your first product.",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
-        cols = {"Item": 160, "Category": 120, "Qty": 70, "Min": 60,
-                "Cost": 90, "Price": 90, "Margin": 80, "Supplier": 150}
+        cols = {"Item": 180, "Category": 130, "Qty": 70, "Min": 65,
+                "Cost": 95, "Price": 95, "Margin": 85, "Supplier": 160}
+        aligns = {"Qty": "e", "Min": "e", "Cost": "e", "Price": "e", "Margin": "e"}
         self.table = Table(self._container, columns=cols, key_column="ID",
-                           on_double_click=self._edit_form)
+                           on_double_click=self._edit_form, alignments=aligns)
 
         self.refresh()
 
@@ -165,7 +166,7 @@ class StockPage(ttk.Frame):
         supplier_var = tk.StringVar()
         ttk.Combobox(body, textvariable=supplier_var,
                      values=[""] + list(supplier_names.keys()),
-                     state="normal", width=32).grid(row=row, column=1, padx=10, pady=6, sticky="ew")
+                     state="readonly", width=32).grid(row=row, column=1, padx=10, pady=6, sticky="ew")
 
         def save():
             name = fields["item_name"].get().strip()

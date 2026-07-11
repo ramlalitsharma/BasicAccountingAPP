@@ -93,11 +93,12 @@ class SalesPage(ttk.Frame):
         tk.Label(self._empty_state, text="Click 'New Sale' to record your first sale.",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
-        cols = {"Invoice": 100, "Item": 160, "Category": 100,
-                "Customer": 140, "Qty": 70, "Price": 90, "Total": 90,
-                "Status": 90, "Paid": 90, "Unpaid": 90, "Date": 150}
+        cols = {"Invoice": 115, "Item": 180, "Category": 110,
+                "Customer": 150, "Qty": 75, "Price": 95, "Total": 95,
+                "Status": 95, "Paid": 95, "Unpaid": 95, "Date": 160}
+        aligns = {"Qty": "e", "Price": "e", "Total": "e", "Paid": "e", "Unpaid": "e"}
         self.table = Table(self._container, columns=cols, key_column="ID",
-                           on_double_click=self._print_bill)
+                           on_double_click=self._print_bill, alignments=aligns)
 
         self.refresh()
 
@@ -152,7 +153,7 @@ class SalesPage(ttk.Frame):
 
     def _new_sale_form(self):
         app = self.winfo_toplevel()
-        body = app.show_modal("New Sale", width=450, height=450)
+        body = app.show_modal("New Sale", width=500, height=530)
 
         stock_items = models.get_stock_items()
         item_map = {f"{s['Item_Name']} (Qty: {s['Quantity']})": s["ID"]

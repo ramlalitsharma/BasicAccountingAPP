@@ -4,22 +4,21 @@ from config import (
     ACCENT_COLOR, CARD_BG, BG_COLOR, BG_DARK, FONT_FAMILY,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, CARD_BORDER,
     FONT_SIZE_SM, FONT_SIZE_MD, FONT_SIZE_LG, PADDING_MD,
+    get_color,
 )
 from ui.widgets.tooltip import ToolTip
-
-ALT_ROW_BG = "#F8FAFC"
-LOW_STOCK_BG = "#FEF2F2"
 
 
 class Table(ttk.Frame):
     def __init__(self, parent, columns, key_column="id", page_size=50,
-                 on_double_click=None, search_all_cols=False, **kwargs):
+                 on_double_click=None, search_all_cols=False, alignments=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.columns = columns
         self.key_column = key_column
         self.page_size = page_size
         self.on_double_click = on_double_click
         self.search_all_cols = search_all_cols
+        self.alignments = alignments or {}
         self._all_rows = []
         self._row_map = {}
         self._page = 0
@@ -31,13 +30,14 @@ class Table(ttk.Frame):
     def _build_widget(self):
         col_list = list(self.columns.keys())
         self.tree = ttk.Treeview(self, columns=col_list,
-                                 show="headings", selectmode="browse")
+                                 show="headings", selectmode="extended")
         col_width = max(900, len(col_list) * 100)
         for col, width in self.columns.items():
             heading = col.replace("_", " ").title()
             self.tree.heading(col, text=heading,
                               command=lambda c=col: self._sort_by(c))
-            self.tree.column(col, width=width, minwidth=70)
+            anchor = self.alignments.get(col, "w")
+            self.tree.column(col, width=width, minwidth=70, anchor=anchor)
 
         if self.on_double_click:
             self.tree.bind("<Double-1>", lambda e: self.on_double_click())
@@ -53,8 +53,11 @@ class Table(ttk.Frame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
+        sep = ttk.Separator(self, orient="horizontal")
+        sep.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(4, 0))
+
         self.nav_frame = ttk.Frame(self)
-        self.nav_frame.grid(row=2, column=0, columnspan=4, pady=6, sticky="ew")
+        self.nav_frame.grid(row=3, column=0, columnspan=4, pady=6, sticky="ew")
 
         self.info_lbl = ttk.Label(self.nav_frame, text="",
                                   font=(FONT_FAMILY, FONT_SIZE_SM),
@@ -121,11 +124,20 @@ class Table(ttk.Frame):
         end = start + self.page_size
         page_rows = self._all_rows[start:end]
 
-        self.tree.tag_configure("evenrow", background=ALT_ROW_BG)
-        self.tree.tag_configure("oddrow", background=CARD_BG)
-        self.tree.tag_configure("low_stock", background=LOW_STOCK_BG)
+        alt_bg = get_color("ALT_ROW_BG")
+        card_bg = get_color("CARD_BG")
+        low_stock_bg = get_color("LOW_STOCK_BG")
+        separator_bg = get_color("BORDER_COLOR")
+        self.tree.tag_configure("evenrow", background=alt_bg)
+        self.tree.tag_configure("oddrow", background=card_bg)
+        self.tree.tag_configure("low_stock", background=low_stock_bg)
+        self.tree.tag_configure("separator", background=separator_bg, font=(FONT_FAMILY, 1))
 
         for idx, row in enumerate(page_rows):
+            if idx > 0 and idx % 10 == 0:
+                sep_values = [""] * len(self.columns)
+                self.tree.insert("", tk.END, values=sep_values, tags=("separator",))
+
             values = [row.get(col, "") for col in self.columns]
             item_id = self.tree.insert("", tk.END, values=values)
             key = row.get(self.key_column)
@@ -192,3 +204,12 @@ class Table(ttk.Frame):
     def get_selected_key(self):
         row = self.get_selected_row()
         return row["key"] if row else None
+
+    def get_selected_keys(self):
+        sel = self.tree.selection()
+        keys = []
+        for item_id in sel:
+            key = self._row_map.get(item_id)
+            if key is not None:
+                keys.append(key)
+        return keys
