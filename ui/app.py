@@ -20,6 +20,7 @@ from config import (
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
     MODAL_OVERLAY, PADDING_MD, PADDING_LG,
     DATA_DIR, ICON_PATH, get_setting, set_setting,
+    get_color, _get_current_theme,
 )
 from database import models
 from database.backup import backup_database, create_backup, start_auto_backup, stop_auto_backup
@@ -91,7 +92,7 @@ class AccountingApp(tk.Tk):
         self._setup_custom_titlebar()
         self._setup_sidebar()
         self._setup_content()
-        self._setup_styles()
+        self._apply_theme()
         self._setup_status_bar()
         self._setup_shortcuts()
 
@@ -400,12 +401,12 @@ class AccountingApp(tk.Tk):
             self._loading_label = None
 
     def _on_nav_hover(self, btn, indicator):
-        if btn.cget("bg") != SIDEBAR_ACTIVE_BG:
-            btn.configure(bg=SIDEBAR_HOVER_BG, fg="white")
+        if btn.cget("bg") != get_color("SIDEBAR_ACTIVE_BG"):
+            btn.configure(bg=get_color("SIDEBAR_HOVER_BG"), fg="white")
 
     def _on_nav_leave(self, btn, indicator):
-        if btn.cget("bg") != SIDEBAR_ACTIVE_BG:
-            btn.configure(bg=SIDEBAR_BG, fg=SIDEBAR_FG)
+        if btn.cget("bg") != get_color("SIDEBAR_ACTIVE_BG"):
+            btn.configure(bg=get_color("SIDEBAR_BG"), fg=get_color("SIDEBAR_FG"))
 
     def _setup_content(self):
         self.update_bar = tk.Frame(self, bg=WARNING_COLOR, height=32)
@@ -432,63 +433,150 @@ class AccountingApp(tk.Tk):
         self.content = tk.Frame(content_wrapper, bg=BG_COLOR)
         self.content.pack(fill=tk.BOTH, expand=True)
 
-    def _setup_styles(self):
+    def _apply_theme(self):
+        is_dark = _get_current_theme() == "Dark"
+        bg = get_color("BG_COLOR")
+        bg_dark = get_color("BG_DARK")
+        card_bg = get_color("CARD_BG")
+        card_border = get_color("CARD_BORDER")
+        text_primary = get_color("TEXT_PRIMARY")
+        text_secondary = get_color("TEXT_SECONDARY")
+        text_muted = get_color("TEXT_MUTED")
+        accent = get_color("ACCENT_COLOR")
+        accent_light = get_color("ACCENT_LIGHT")
+        accent_dark = get_color("ACCENT_DARK")
+        sidebar_bg = get_color("SIDEBAR_BG")
+        sidebar_fg = get_color("SIDEBAR_FG")
+        sidebar_active_bg = get_color("SIDEBAR_ACTIVE_BG")
+        sidebar_active_fg = get_color("SIDEBAR_ACTIVE_FG")
+        sidebar_hover_bg = get_color("SIDEBAR_HOVER_BG")
+        sidebar_accent = get_color("SIDEBAR_ACCENT")
+        primary = get_color("PRIMARY_COLOR")
+        warning = get_color("WARNING_COLOR")
+        border_color = get_color("BORDER_COLOR")
+
         style = ttk.Style(self)
         style.theme_use("clam")
+        style.configure(".", font=(FONT_FAMILY, FONT_SIZE_MD))
+        style.configure("TLabel", background=bg, foreground=text_primary)
+        style.configure("Heading.TLabel", font=(FONT_FAMILY, FONT_SIZE_XXL, "bold"), foreground=text_primary)
+        style.configure("SubHeading.TLabel", font=(FONT_FAMILY, FONT_SIZE_XL, "bold"), foreground=text_primary)
+        style.configure("Muted.TLabel", foreground=text_muted)
+        style.configure("Card.TLabel", background=card_bg, foreground=text_primary)
+        style.configure("TFrame", background=bg)
+        style.configure("Card.TFrame", background=card_bg)
+        style.configure("TLabelframe", background=card_bg, foreground=text_primary)
+        style.configure("TLabelframe.Label", background=card_bg, foreground=text_primary)
+        style.configure("TButton", padding=(14, 7), background=accent, foreground="white", borderwidth=0, focusthickness=0)
+        style.map("TButton", background=[("active", accent_light), ("pressed", accent_dark)], foreground=[("active", "white")])
+        style.configure("Secondary.TButton", background=text_secondary)
+        style.map("Secondary.TButton", background=[("active", text_muted)])
+        style.configure("Treeview", background=card_bg, foreground=text_primary, fieldbackground=card_bg, rowheight=32, borderwidth=0)
+        style.configure("Treeview.Heading", font=(FONT_FAMILY, FONT_SIZE_MD, "bold"), background=accent, foreground="white", relief="flat", borderwidth=0)
+        style.map("Treeview.Heading", background=[("active", accent_light)])
+        style.configure("TEntry", padding=6, fieldbackground=card_bg, foreground=text_primary, borderwidth=1)
+        style.map("TEntry", fieldbackground=[("focus", card_bg)])
+        style.configure("TCombobox", padding=4, fieldbackground=card_bg, foreground=text_primary)
+        style.map("TCombobox", fieldbackground=[("focus", card_bg)])
+        style.configure("TScrollbar", gripcount=0, background=bg_dark, troughcolor=bg, borderwidth=0, arrowcolor=text_muted)
+        style.map("TScrollbar", background=[("active", accent_light)])
+        style.configure("TNotebook", background=bg, foreground=text_primary)
+        style.configure("TNotebook.Tab", background=bg_dark, foreground=text_secondary, padding=[12, 4])
+        style.map("TNotebook.Tab", background=[("selected", card_bg)], foreground=[("selected", text_primary)])
 
-        font_family = FONT_FAMILY
+        self.configure(bg=primary if not is_dark else sidebar_bg)
+        if hasattr(self, '_titlebar') and self._titlebar.winfo_exists():
+            self._titlebar.configure(bg=primary)
+        if hasattr(self, 'content') and self.content.winfo_exists():
+            self.content.configure(bg=bg)
+        if hasattr(self, 'status_bar') and self.status_bar.winfo_exists():
+            self.status_bar.configure(bg=bg_dark)
+        if hasattr(self, 'update_bar') and self.update_bar.winfo_exists():
+            self.update_bar.configure(bg=warning)
 
-        style.configure(".", font=(font_family, FONT_SIZE_MD))
+        self._recolor_sidebar(sidebar_bg, sidebar_fg, sidebar_active_bg, sidebar_active_fg, sidebar_hover_bg)
+        self._recolor_widget_tree(self.content, bg, card_bg, bg_dark, text_primary, text_secondary, text_muted)
+        if hasattr(self, 'status_bar') and self.status_bar.winfo_exists():
+            self._recolor_widget_tree(self.status_bar, bg, card_bg, bg_dark, text_primary, text_secondary, text_muted)
+        if hasattr(self, 'update_bar') and self.update_bar.winfo_exists():
+            self._recolor_widget_tree(self.update_bar, bg, card_bg, bg_dark, text_primary, text_secondary, text_muted)
 
-        style.configure("TLabel", background=BG_COLOR, foreground=TEXT_PRIMARY,
-                        font=(font_family, FONT_SIZE_MD))
-        style.configure("Heading.TLabel", font=(font_family, FONT_SIZE_XXL, "bold"),
-                        foreground=TEXT_PRIMARY)
-        style.configure("SubHeading.TLabel", font=(font_family, FONT_SIZE_XL, "bold"),
-                        foreground=TEXT_PRIMARY)
-        style.configure("Muted.TLabel", foreground=TEXT_MUTED)
-        style.configure("Card.TLabel", background=CARD_BG, foreground=TEXT_PRIMARY)
+    def _recolor_sidebar(self, sidebar_bg, sidebar_fg, sidebar_active_bg, sidebar_active_fg, sidebar_hover_bg):
+        if not hasattr(self, '_nav_buttons'):
+            return
+        for key, btn in self._nav_buttons.items():
+            if self._current_page == key:
+                btn.configure(bg=sidebar_active_bg, fg=sidebar_active_fg)
+            else:
+                btn.configure(bg=sidebar_bg, fg=sidebar_fg)
+        for ind in self._nav_indicators.values():
+            ind.configure(bg=sidebar_bg)
+        try:
+            for child in self.winfo_children():
+                self._recolor_sidebar_children(child, sidebar_bg, sidebar_fg, sidebar_hover_bg)
+        except tk.TclError:
+            pass
 
-        style.configure("TFrame", background=BG_COLOR)
-        style.configure("Card.TFrame", background=CARD_BG)
-        style.configure("TLabelframe", background=CARD_BG, foreground=TEXT_PRIMARY)
-        style.configure("TLabelframe.Label", background=CARD_BG, foreground=TEXT_PRIMARY,
-                        font=(font_family, FONT_SIZE_MD, "bold"))
+    def _recolor_sidebar_children(self, widget, sidebar_bg, sidebar_fg, sidebar_hover_bg):
+        if isinstance(widget, tk.Label):
+            try:
+                cbg = widget.cget("bg")
+                cfg = widget.cget("fg")
+                if cbg in ("#0F172A", "#020617") or cfg in ("#94A3B8", "#64748B"):
+                    widget.configure(bg=sidebar_bg, fg=sidebar_fg)
+                    widget.bind("<Enter>", lambda e, b=widget: b.configure(bg=sidebar_hover_bg, fg="white"))
+                    widget.bind("<Leave>", lambda e, b=widget: b.configure(bg=sidebar_bg, fg=sidebar_fg))
+            except tk.TclError:
+                pass
+        elif isinstance(widget, tk.Frame):
+            try:
+                cbg = widget.cget("bg")
+                if cbg in ("#0F172A", "#020617", "#1E293B"):
+                    widget.configure(bg=sidebar_bg)
+            except tk.TclError:
+                pass
+        try:
+            for child in widget.winfo_children():
+                self._recolor_sidebar_children(child, sidebar_bg, sidebar_fg, sidebar_hover_bg)
+        except tk.TclError:
+            pass
 
-        style.configure("TButton", font=(font_family, FONT_SIZE_MD),
-                        padding=(14, 7), background=ACCENT_COLOR,
-                        foreground="white", borderwidth=0, focusthickness=0)
-        style.map("TButton",
-                  background=[("active", ACCENT_LIGHT), ("pressed", ACCENT_DARK)],
-                  foreground=[("active", "white")])
-        style.configure("Secondary.TButton", background=TEXT_SECONDARY)
-        style.map("Secondary.TButton",
-                   background=[("active", TEXT_MUTED)])
+    def _recolor_widget_tree(self, widget, bg, card_bg, bg_dark, text_primary, text_secondary, text_muted):
+        success = get_color("SUCCESS_COLOR")
+        warning = get_color("WARNING_COLOR")
+        danger = get_color("DANGER_COLOR")
+        bg_map = {"#F1F5F9": bg, "#FFFFFF": card_bg, "#E2E8F0": bg_dark, "#F8FAFC": card_bg,
+                  "#0F172A": bg, "#1E293B": card_bg, "#334155": bg_dark, "#020617": bg}
+        fg_map = {"#1E293B": text_primary, "#64748B": text_secondary, "#94A3B8": text_muted,
+                  "#555": text_secondary, "#777": text_muted, "#2c3e50": text_primary,
+                  "#F1F5F9": text_primary, "#FFFFFF": text_primary, "#CCCCCC": text_muted,
+                  "#059669": success, "#10B981": success,
+                  "#D97706": warning, "#F59E0B": warning,
+                  "#DC2626": danger, "#EF4444": danger}
+        try:
+            if isinstance(widget, (tk.Frame, tk.Label, tk.Button, tk.Canvas, tk.Text)):
+                cbg = widget.cget("bg")
+                if cbg in bg_map:
+                    widget.configure(bg=bg_map[cbg])
+                cfg = widget.cget("fg")
+                if cfg in fg_map:
+                    widget.configure(fg=fg_map[cfg])
+        except tk.TclError:
+            pass
+        try:
+            for child in widget.winfo_children():
+                self._recolor_widget_tree(child, bg, card_bg, bg_dark, text_primary, text_secondary, text_muted)
+        except tk.TclError:
+            pass
 
-        style.configure("Treeview", background=CARD_BG, foreground=TEXT_PRIMARY,
-                        fieldbackground=CARD_BG, font=(font_family, FONT_SIZE_MD),
-                        rowheight=32, borderwidth=0)
-        style.configure("Treeview.Heading", font=(font_family, FONT_SIZE_MD, "bold"),
-                        background=ACCENT_COLOR, foreground="white",
-                        relief="flat", borderwidth=0)
-        style.map("Treeview.Heading",
-                  background=[("active", ACCENT_LIGHT)])
-        style.configure("Treeview", bordercolor=CARD_BORDER,
-                        lightcolor=CARD_BORDER, darkcolor=CARD_BORDER)
-
-        style.configure("TEntry", font=(font_family, FONT_SIZE_MD),
-                        padding=6, fieldbackground=CARD_BG,
-                        foreground=TEXT_PRIMARY, borderwidth=1)
-        style.map("TEntry", fieldbackground=[("focus", "#FFFFFF")])
-
-        style.configure("TCombobox", font=(font_family, FONT_SIZE_MD),
-                        padding=4, fieldbackground=CARD_BG,
-                        foreground=TEXT_PRIMARY)
-        style.map("TCombobox", fieldbackground=[("focus", "#FFFFFF")])
-
-        style.configure("TScrollbar", gripcount=0, background=BG_DARK,
-                        troughcolor=BG_COLOR, borderwidth=0, arrowcolor=TEXT_MUTED)
-        style.map("TScrollbar", background=[("active", ACCENT_LIGHT)])
+    def reload_current_page(self):
+        if self._current_page:
+            key = self._current_page
+            if key in self._pages:
+                del self._pages[key]
+            for widget in self.content.winfo_children():
+                widget.destroy()
+            self._navigate(key)
 
     def _navigate(self, page_key):
         for widget in self.content.winfo_children():
@@ -859,6 +947,12 @@ class AccountingApp(tk.Tk):
             webbrowser.open(RELEASE_BASE_URL)
 
     def show_modal(self, title, width=500, height=400):
+        card_bg = get_color("CARD_BG")
+        card_border = get_color("CARD_BORDER")
+        primary = get_color("PRIMARY_COLOR")
+        sidebar_accent = get_color("SIDEBAR_ACCENT")
+        danger = get_color("DANGER_COLOR")
+
         overlay = tk.Frame(self, bg=MODAL_OVERLAY)
         overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
         overlay.lift()
@@ -868,32 +962,32 @@ class AccountingApp(tk.Tk):
         overlay.focus_set()
         overlay.grab_set()
 
-        dialog = tk.Frame(overlay, bg=CARD_BG,
-                           highlightbackground=CARD_BORDER,
+        dialog = tk.Frame(overlay, bg=card_bg,
+                           highlightbackground=card_border,
                            highlightthickness=1,
-                           highlightcolor=CARD_BORDER)
+                           highlightcolor=card_border)
         dialog.place(relx=0.5, rely=0.5, anchor="center")
         dialog.configure(width=width, height=height)
         dialog.pack_propagate(False)
 
-        title_frame = tk.Frame(dialog, bg=PRIMARY_COLOR, height=36)
+        title_frame = tk.Frame(dialog, bg=primary, height=36)
         title_frame.pack(fill=tk.X)
         title_frame.pack_propagate(False)
-        accent_line = tk.Frame(title_frame, bg=SIDEBAR_ACCENT, height=2)
+        accent_line = tk.Frame(title_frame, bg=sidebar_accent, height=2)
         accent_line.pack(side=tk.BOTTOM, fill=tk.X)
         tk.Label(title_frame, text=title,
                  font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
-                 bg=PRIMARY_COLOR, fg="white").pack(side=tk.LEFT, padx=14, pady=4)
+                 bg=primary, fg="white").pack(side=tk.LEFT, padx=14, pady=4)
         close_btn = tk.Label(title_frame, text="\u2715",
                              font=(FONT_FAMILY, FONT_SIZE_LG),
-                             bg=PRIMARY_COLOR, fg="white",
+                             bg=primary, fg="white",
                              padx=12, cursor="hand2")
         close_btn.pack(side=tk.RIGHT)
         close_btn.bind("<Button-1>", lambda e: self.close_modal())
-        close_btn.bind("<Enter>", lambda e: close_btn.configure(bg=DANGER_COLOR))
-        close_btn.bind("<Leave>", lambda e: close_btn.configure(bg=PRIMARY_COLOR))
+        close_btn.bind("<Enter>", lambda e: close_btn.configure(bg=danger))
+        close_btn.bind("<Leave>", lambda e: close_btn.configure(bg=primary))
 
-        body = tk.Frame(dialog, bg=CARD_BG, padx=20, pady=15)
+        body = tk.Frame(dialog, bg=card_bg, padx=20, pady=15)
         body.pack(fill=tk.BOTH, expand=True)
 
         def on_escape(e):

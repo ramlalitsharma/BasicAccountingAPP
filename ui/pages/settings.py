@@ -39,13 +39,13 @@ class SettingsPage(ttk.Frame):
 
         ttk.Label(frame, text="Currency Symbol",
                   font=(FONT_FAMILY, 11)).grid(row=0, column=0, sticky="w", pady=8)
-        self.currency_var = tk.StringVar(value="\u20B9")
+        self.currency_var = tk.StringVar(value=get_setting("currency_symbol", "\u20B9"))
         ttk.Entry(frame, textvariable=self.currency_var, width=10).grid(
             row=0, column=1, sticky="w", padx=10)
 
         ttk.Label(frame, text="Theme",
                   font=(FONT_FAMILY, 11)).grid(row=1, column=0, sticky="w", pady=8)
-        self.theme_var = tk.StringVar(value="Light")
+        self.theme_var = tk.StringVar(value=get_setting("theme", "Light"))
         ttk.Combobox(frame, textvariable=self.theme_var,
                      values=["Light", "Dark"], state="readonly", width=12).grid(
             row=1, column=1, sticky="w", padx=10)
@@ -402,46 +402,12 @@ class SettingsPage(ttk.Frame):
                                 "Existing files must be moved manually.")
 
     def _toggle_theme(self, *args):
-        from config import (
-            BG_COLOR as OLD_BG, BG_DARK as OLD_BG_DARK,
-            CARD_BG as OLD_CARD, TEXT_PRIMARY as OLD_FG,
-            SIDEBAR_BG as OLD_SIDEBAR,
-        )
         theme = self.theme_var.get()
-        if theme == "Dark":
-            bg, fg, card = "#1E293B", "#F1F5F9", "#334155"
-            sidebar = "#0F172A"
-        else:
-            bg, fg, card = "#F1F5F9", "#1E293B", "#FFFFFF"
-            sidebar = "#0F172A"
-
-        self._app.configure(bg=bg)
-
-        def apply_theme(widget):
-            old_bgs = (OLD_BG, OLD_BG_DARK, OLD_CARD, "#2d2d2d", "#ffffff",
-                       "#3d3d3d", "#1a1a2e", "#16213e", "#0f3460")
-            old_fgs = (OLD_FG, "#2c3e50", "#ffffff", "#777", "#c8d6e5")
-            try:
-                if isinstance(widget, (tk.Label, tk.Frame, tk.Button)):
-                    cbg = widget.cget("bg")
-                    if cbg in old_bgs:
-                        new_bg = card if cbg in (OLD_CARD, "#ffffff", "#3d3d3d") else (
-                            sidebar if cbg in ("#1a1a2e", "#0f3460", "#16213e") else bg)
-                        widget.configure(bg=new_bg)
-                if isinstance(widget, (tk.Label, tk.Button)):
-                    cfg = widget.cget("fg")
-                    if cfg in old_fgs:
-                        widget.configure(fg=fg)
-            except tk.TclError:
-                pass
-            for child in widget.winfo_children():
-                apply_theme(child)
-
-        apply_theme(self._app)
-
-        style = ttk.Style(self._app)
-        style.theme_use("clam")
-        style.configure("TLabel", background=bg, foreground=fg)
-        style.configure("TFrame", background=bg)
-        style.configure("Treeview", background=card, foreground=fg,
-                        fieldbackground=card)
+        set_setting("theme", theme)
+        app = self._app
+        app.reload_current_page()
+        app._apply_theme()
+        try:
+            app.toast.show(f"Theme changed to {theme}", "success", 3000)
+        except tk.TclError:
+            pass

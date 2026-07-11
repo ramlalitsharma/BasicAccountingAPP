@@ -115,7 +115,7 @@ class PreordersPage(ttk.Frame):
 
     def _add_form(self):
         app = self.winfo_toplevel()
-        body = app.show_modal("New Preorder", width=500, height=380)
+        body = app.show_modal("New Preorder", width=550, height=520)
 
         customers = models.get_customers()
         customer_map = {f"{c['Name']} ({c['Contact']})": c["ID"] for c in customers}
@@ -123,19 +123,19 @@ class PreordersPage(ttk.Frame):
         stock_items = models.get_stock_items()
         item_map = {s["Item_Name"]: s["ID"] for s in stock_items}
 
-        ttk.Label(body, text="Customer").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        ttk.Label(body, text="Customer").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         customer_var = tk.StringVar()
         customer_combo = ttk.Combobox(body, textvariable=customer_var,
-                                       values=list(customer_map.keys()),
-                                       state="normal", width=35)
-        customer_combo.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+                                        values=list(customer_map.keys()),
+                                        state="normal", width=38)
+        customer_combo.grid(row=0, column=1, padx=10, pady=8, sticky="ew")
 
-        ttk.Label(body, text="Item").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        ttk.Label(body, text="Item").grid(row=1, column=0, padx=10, pady=8, sticky="w")
         item_var = tk.StringVar()
         item_combo = ttk.Combobox(body, textvariable=item_var,
-                                   values=list(item_map.keys()),
-                                   state="normal", width=35)
-        item_combo.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+                                    values=list(item_map.keys()),
+                                    state="normal", width=38)
+        item_combo.grid(row=1, column=1, padx=10, pady=8, sticky="ew")
 
         def on_item_select(*args):
             sel = item_var.get()
@@ -147,22 +147,61 @@ class PreordersPage(ttk.Frame):
 
         item_combo.bind("<<ComboboxSelected>>", on_item_select)
 
-        ttk.Label(body, text="Quantity").grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        qty_entry = ttk.Entry(body, width=35)
-        qty_entry.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        ttk.Label(body, text="Quantity").grid(row=2, column=0, padx=10, pady=8, sticky="w")
+        qty_entry = ttk.Entry(body, width=38)
+        qty_entry.grid(row=2, column=1, padx=10, pady=8, sticky="ew")
 
-        ttk.Label(body, text="Preorder Price").grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        price_entry = ttk.Entry(body, width=35)
-        price_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
+        ttk.Label(body, text="Preorder Price").grid(row=3, column=0, padx=10, pady=8, sticky="w")
+        price_entry = ttk.Entry(body, width=38)
+        price_entry.grid(row=3, column=1, padx=10, pady=8, sticky="ew")
 
-        ttk.Label(body, text="Delivery Date").grid(row=4, column=0, padx=10, pady=10, sticky="w")
+        ttk.Label(body, text="Delivery Date").grid(row=4, column=0, padx=10, pady=8, sticky="w")
         delivery_var = tk.StringVar()
-        delivery_entry = ttk.Entry(body, textvariable=delivery_var, width=35)
-        delivery_entry.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+        delivery_entry = ttk.Entry(body, textvariable=delivery_var, width=38)
+        delivery_entry.grid(row=4, column=1, padx=10, pady=8, sticky="ew")
 
-        ttk.Label(body, text="Notes").grid(row=5, column=0, padx=10, pady=10, sticky="w")
-        notes_entry = ttk.Entry(body, width=35)
-        notes_entry.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
+        ttk.Label(body, text="Delivery Address").grid(row=5, column=0, padx=10, pady=8, sticky="w")
+        address_entry = ttk.Entry(body, width=38)
+        address_entry.grid(row=5, column=1, padx=10, pady=8, sticky="ew")
+
+        ttk.Label(body, text="Notes").grid(row=6, column=0, padx=10, pady=8, sticky="w")
+        notes_entry = ttk.Entry(body, width=38)
+        notes_entry.grid(row=6, column=1, padx=10, pady=8, sticky="ew")
+
+        ttk.Label(body, text="Advance Payment").grid(row=7, column=0, padx=10, pady=8, sticky="w")
+        advance_type_var = tk.StringVar(value="none")
+        advance_type_combo = ttk.Combobox(body, textvariable=advance_type_var,
+                                           values=["none", "full", "partial"],
+                                           state="readonly", width=36)
+        advance_type_combo.grid(row=7, column=1, padx=10, pady=8, sticky="ew")
+
+        ttk.Label(body, text="Advance Amount").grid(row=8, column=0, padx=10, pady=8, sticky="w")
+        advance_amt_entry = ttk.Entry(body, width=38)
+        advance_amt_entry.grid(row=8, column=1, padx=10, pady=8, sticky="ew")
+
+        def on_advance_type_change(*args):
+            at = advance_type_var.get()
+            if at == "none" or at == "full":
+                advance_amt_entry.config(state="readonly")
+                if at == "full":
+                    try:
+                        q = float(qty_entry.get() or 0)
+                        p = float(price_entry.get() or 0)
+                        advance_amt_entry.config(state="normal")
+                        advance_amt_entry.delete(0, tk.END)
+                        advance_amt_entry.insert(0, f"{q * p:.2f}")
+                        advance_amt_entry.config(state="readonly")
+                    except ValueError:
+                        pass
+                else:
+                    advance_amt_entry.config(state="normal")
+                    advance_amt_entry.delete(0, tk.END)
+                    advance_amt_entry.config(state="readonly")
+            else:
+                advance_amt_entry.config(state="normal")
+                advance_amt_entry.delete(0, tk.END)
+
+        advance_type_combo.bind("<<ComboboxSelected>>", on_advance_type_change)
 
         def save():
             cust_name = customer_var.get()
@@ -187,10 +226,27 @@ class PreordersPage(ttk.Frame):
                 messagebox.showerror("Error", "Quantity and Price must be positive numbers")
                 return
             delivery = delivery_var.get().strip()
+            address = address_entry.get().strip()
+            advance_type = advance_type_var.get()
+            advance_amt = 0
+            if advance_type != "none":
+                try:
+                    advance_amt_entry.config(state="normal")
+                    advance_amt = float(advance_amt_entry.get() or 0)
+                    if advance_type != "none" and advance_amt < 0:
+                        raise ValueError
+                    if advance_type == "full" and advance_amt != qty * price:
+                        messagebox.showerror("Error", "Full advance amount must equal total")
+                        return
+                except ValueError:
+                    messagebox.showerror("Input Error", "Please enter a valid advance amount.")
+                    return
             try:
                 models.add_preorder(
                     customer_map[cust_name], item_map[item_name],
-                    qty, price, delivery, notes_entry.get())
+                    qty, price, delivery, notes_entry.get(),
+                    delivery_address=address,
+                    advance_amount=advance_amt, advance_type=advance_type)
             except PermissionError as e:
                 messagebox.showerror("Update Required", str(e))
                 return
@@ -202,7 +258,7 @@ class PreordersPage(ttk.Frame):
             messagebox.showinfo("Success", "Preorder created")
 
         ttk.Button(body, text="Create Preorder", command=save).grid(
-            row=6, column=0, columnspan=2, pady=15)
+            row=9, column=0, columnspan=2, pady=15)
         body.grid_columnconfigure(1, weight=1)
 
     def _edit_form(self):
@@ -218,7 +274,7 @@ class PreordersPage(ttk.Frame):
             return
 
         app = self.winfo_toplevel()
-        body = app.show_modal("Edit Preorder", width=500, height=380)
+        body = app.show_modal("Edit Preorder", width=550, height=520)
 
         customers = models.get_customers()
         customer_map = {f"{c['Name']} ({c['Contact']})": c["ID"] for c in customers}
@@ -232,32 +288,49 @@ class PreordersPage(ttk.Frame):
         customer_var = tk.StringVar(value=customer_rev.get(preorder.get("Customer_ID"), ""))
         ttk.Combobox(body, textvariable=customer_var,
                       values=list(customer_map.keys()),
-                      state="normal", width=35).grid(row=0, column=1, padx=10, pady=8, sticky="ew")
+                      state="normal", width=38).grid(row=0, column=1, padx=10, pady=8, sticky="ew")
 
         ttk.Label(body, text="Item").grid(row=1, column=0, padx=10, pady=8, sticky="w")
         item_var = tk.StringVar(value=item_rev.get(preorder.get("Stock_ID"), ""))
         ttk.Combobox(body, textvariable=item_var,
                       values=list(item_map.keys()),
-                      state="normal", width=35).grid(row=1, column=1, padx=10, pady=8, sticky="ew")
+                      state="normal", width=38).grid(row=1, column=1, padx=10, pady=8, sticky="ew")
 
         ttk.Label(body, text="Quantity").grid(row=2, column=0, padx=10, pady=8, sticky="w")
-        qty_entry = ttk.Entry(body, width=35)
+        qty_entry = ttk.Entry(body, width=38)
         qty_entry.insert(0, str(preorder.get("Quantity", 0)))
         qty_entry.grid(row=2, column=1, padx=10, pady=8, sticky="ew")
 
         ttk.Label(body, text="Preorder Price").grid(row=3, column=0, padx=10, pady=8, sticky="w")
-        price_entry = ttk.Entry(body, width=35)
+        price_entry = ttk.Entry(body, width=38)
         price_entry.insert(0, str(preorder.get("Preorder_Price", 0)))
         price_entry.grid(row=3, column=1, padx=10, pady=8, sticky="ew")
 
         ttk.Label(body, text="Delivery Date").grid(row=4, column=0, padx=10, pady=8, sticky="w")
         delivery_var = tk.StringVar(value=preorder.get("Delivery_Date", ""))
-        ttk.Entry(body, textvariable=delivery_var, width=35).grid(row=4, column=1, padx=10, pady=8, sticky="ew")
+        ttk.Entry(body, textvariable=delivery_var, width=38).grid(row=4, column=1, padx=10, pady=8, sticky="ew")
 
-        ttk.Label(body, text="Notes").grid(row=5, column=0, padx=10, pady=8, sticky="w")
-        notes_entry = ttk.Entry(body, width=35)
+        ttk.Label(body, text="Delivery Address").grid(row=5, column=0, padx=10, pady=8, sticky="w")
+        address_entry = ttk.Entry(body, width=38)
+        address_entry.insert(0, preorder.get("Delivery_Address", ""))
+        address_entry.grid(row=5, column=1, padx=10, pady=8, sticky="ew")
+
+        ttk.Label(body, text="Notes").grid(row=6, column=0, padx=10, pady=8, sticky="w")
+        notes_entry = ttk.Entry(body, width=38)
         notes_entry.insert(0, preorder.get("Notes", ""))
-        notes_entry.grid(row=5, column=1, padx=10, pady=8, sticky="ew")
+        notes_entry.grid(row=6, column=1, padx=10, pady=8, sticky="ew")
+
+        ttk.Label(body, text="Advance Payment").grid(row=7, column=0, padx=10, pady=8, sticky="w")
+        advance_type_var = tk.StringVar(value=preorder.get("Advance_Payment_Type", "none"))
+        advance_type_combo = ttk.Combobox(body, textvariable=advance_type_var,
+                                           values=["none", "full", "partial"],
+                                           state="readonly", width=36)
+        advance_type_combo.grid(row=7, column=1, padx=10, pady=8, sticky="ew")
+
+        ttk.Label(body, text="Advance Amount").grid(row=8, column=0, padx=10, pady=8, sticky="w")
+        advance_amt_entry = ttk.Entry(body, width=38)
+        advance_amt_entry.insert(0, str(preorder.get("Advance_Amount", 0)))
+        advance_amt_entry.grid(row=8, column=1, padx=10, pady=8, sticky="ew")
 
         def save():
             cust_name = customer_var.get()
@@ -281,10 +354,22 @@ class PreordersPage(ttk.Frame):
             if qty <= 0 or price <= 0:
                 messagebox.showerror("Error", "Quantity and Price must be positive numbers")
                 return
+            advance_type = advance_type_var.get()
+            advance_amt = 0
+            if advance_type != "none":
+                try:
+                    advance_amt = float(advance_amt_entry.get() or 0)
+                    if advance_type != "none" and advance_amt < 0:
+                        raise ValueError
+                except ValueError:
+                    messagebox.showerror("Input Error", "Please enter a valid advance amount.")
+                    return
             try:
                 models.update_preorder(oid,
                     customer_map[cust_name], item_map[item_name],
-                    qty, price, delivery_var.get().strip(), notes_entry.get())
+                    qty, price, delivery_var.get().strip(), notes_entry.get(),
+                    delivery_address=address_entry.get().strip(),
+                    advance_amount=advance_amt, advance_type=advance_type)
             except PermissionError as e:
                 messagebox.showerror("Update Required", str(e))
                 return
@@ -296,7 +381,7 @@ class PreordersPage(ttk.Frame):
             messagebox.showinfo("Success", "Preorder updated")
 
         ttk.Button(body, text="Update", command=save).grid(
-            row=6, column=0, columnspan=2, pady=15)
+            row=9, column=0, columnspan=2, pady=15)
         body.grid_columnconfigure(1, weight=1)
 
     def _complete(self):
@@ -314,13 +399,21 @@ class PreordersPage(ttk.Frame):
         item_name = preorder.get("item_name", "Unknown")
         qty = preorder.get("Quantity", 0)
         total = preorder.get("Total", 0)
+        advance_amt = float(preorder.get("Advance_Amount", 0) or 0)
+        advance_type = preorder.get("Advance_Payment_Type", "none")
+        payment_note = "unpaid"
+        if advance_amt > 0 and advance_type == "full":
+            payment_note = f"paid (₹{advance_amt:.2f} advance already received)"
+        elif advance_amt > 0 and advance_type == "partial":
+            payment_note = f"partial - ₹{advance_amt:.2f} paid, ₹{max(0, total - advance_amt):.2f} due"
         msg = (f"Complete this preorder?\n\n"
                f"Item: {item_name}\n"
                f"Quantity: {qty}\n"
-               f"Total: {format_currency(total)}\n\n"
+               f"Total: {format_currency(total)}\n"
+               f"Advance: {format_currency(advance_amt)} ({advance_type})\n\n"
                f"This will:\n"
                f"  - Deduct {qty} units from stock\n"
-               f"  - Record a sale as unpaid\n"
+               f"  - Record a sale as {payment_note}\n"
                f"  - Mark preorder as completed")
         if not messagebox.askyesno("Confirm Complete", msg):
             return
@@ -367,12 +460,17 @@ class PreordersPage(ttk.Frame):
             data = models.get_preorders(search=self.search.get(), status=status)
         except FileNotFoundError:
             data = []
-        headers = ["Order ID", "Customer", "Item", "Qty", "Price", "Total", "Delivery", "Status", "Date"]
+        headers = ["Order ID", "Customer", "Item", "Qty", "Price", "Total",
+                   "Delivery Date", "Delivery Address", "Advance Amount",
+                   "Advance Type", "Status", "Date"]
         rows = []
         for r in data:
             rows.append([
                 r.get("ID"), r.get("customer_name", ""), r.get("item_name", ""),
                 r.get("Quantity", 0), r.get("Preorder_Price", 0) or 0,
                 r.get("Total", 0) or 0, r.get("Delivery_Date", ""),
+                r.get("Delivery_Address", ""),
+                r.get("Advance_Amount", 0) or 0,
+                r.get("Advance_Payment_Type", "none"),
                 r.get("Status", "pending"), r.get("Created_At", "")[:10]])
         export_to_csv(rows, headers, "preorders_export.csv")

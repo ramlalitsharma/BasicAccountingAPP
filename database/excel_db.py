@@ -57,7 +57,8 @@ SHEETS = {
                     "Payment_Method", "Reference_No", "Created_At"],
     "Preorders": ["ID", "Customer_ID", "Stock_ID", "Quantity", "Preorder_Price",
                   "Total", "Delivery_Date", "Notes", "Status",
-                  "Created_At", "Completed_At", "Sale_ID"],
+                  "Created_At", "Completed_At", "Sale_ID",
+                  "Delivery_Address", "Advance_Amount", "Advance_Payment_Type", "Advance_Paid_At"],
 }
 
 INVOICE_PREFIX = "INV"
@@ -426,6 +427,7 @@ def get_categories():
 # ---- SALES ----
 
 @synchronized
+@synchronized
 def record_sale(stock_id, quantity_sold, price, customer_id=None, 
                 payment_status="paid", paid_amount=None, unpaid_amount=None):
     _check_write_lock()
@@ -583,7 +585,7 @@ def get_sales(search="", from_date="", to_date=""):
         r["category"] = item.get("Category", "")
         r["customer_name"] = customer.get("Name", "Walk-in Customer")
         r["customer_contact"] = customer.get("Contact", "")
-        if search and search.lower() not in r["item_name"].lower():
+        if search and search.lower() not in r["item_name"].lower() and search.lower() not in r["customer_name"].lower():
             continue
         sd = r.get("Sale_Date", "")
         if from_date and sd and sd[:10] < from_date:
@@ -995,15 +997,19 @@ def get_extra_income_summary(from_date="", to_date=""):
 # ---- PREORDERS ----
 
 @synchronized
-def add_preorder(customer_id, stock_id, quantity, preorder_price, delivery_date, notes=""):
+def add_preorder(customer_id, stock_id, quantity, preorder_price, delivery_date,
+                 notes="", delivery_address="", advance_amount=0, advance_type="none"):
     _check_write_lock()
     wb = _get_wb()
     try:
         ws = wb["Preorders"]
         oid = _next_id(ws)
         total = round(quantity * preorder_price, 2)
+        advance_paid_at = _now() if advance_amount > 0 else ""
         ws.append([oid, customer_id, stock_id, quantity, preorder_price,
-                   total, delivery_date, notes, "pending", _now(), "", ""])
+                   total, delivery_date, notes, "pending",
+                   _now(), "", "",
+                   delivery_address, advance_amount, advance_type, advance_paid_at])
         _save_and_close(wb)
         return oid
     except Exception:
@@ -1046,7 +1052,9 @@ def get_preorder(preorder_id):
 
 
 @synchronized
-def update_preorder(preorder_id, customer_id, stock_id, quantity, preorder_price, delivery_date, notes=""):
+def update_preorder(preorder_id, customer_id, stock_id, quantity, preorder_price,
+                    delivery_date, notes="", delivery_address="",
+                    advance_amount=None, advance_type=None):
     _check_write_lock()
     wb = _get_wb()
     try:
@@ -1060,7 +1068,14 @@ def update_preorder(preorder_id, customer_id, stock_id, quantity, preorder_price
                 r["Preorder_Price"] = preorder_price
                 r["Total"] = round(quantity * preorder_price, 2)
                 r["Delivery_Date"] = delivery_date
+                r["Delivery_Address"] = delivery_address
                 r["Notes"] = notes
+                if advance_amount is not None:
+                    r["Advance_Amount"] = advance_amount
+                if advance_type is not None:
+                    r["Advance_Payment_Type"] = advance_type
+                    if advance_amount and advance_amount > 0:
+                        r["Advance_Paid_At"] = _now()
                 break
         _dicts_to_sheet(ws, data, SHEETS["Preorders"])
         _save_and_close(wb)
@@ -1137,12 +1152,30 @@ def complete_preorder(preorder_id):
             raise ValueError(f'Not enough stock. Available: {item["Quantity"]}')
 
         total = round(qty * price, 2)
+        advance_amt = _num(preorder.get("Advance_Amount", 0))
+        advance_type = preorder.get("Advance_Payment_Type", "none")
+
+        if advance_amt > 0 and advance_type == "full":
+            payment_status = "paid"
+            paid_amt = total
+            unpaid_amt = 0
+            payment_date = _now()
+        elif advance_amt > 0 and advance_type == "partial":
+            payment_status = "partial"
+            paid_amt = advance_amt
+            unpaid_amt = round(total - advance_amt, 2)
+            payment_date = preorder.get("Advance_Paid_At", _now())
+        else:
+            payment_status = "unpaid"
+            paid_amt = 0
+            unpaid_amt = total
+            payment_date = ""
 
         sales_ws = wb["Sales"]
         sid = _next_id(sales_ws)
         receipt_no = f"RCP-{sid:06d}"
         sales_ws.append([sid, stock_id, customer_id, qty, price, total,
-                         "unpaid", 0, total, "", _now(), receipt_no])
+                         payment_status, paid_amt, unpaid_amt, payment_date, _now(), receipt_no])
 
         old_qty = item["Quantity"]
         item["Quantity"] = old_qty - qty

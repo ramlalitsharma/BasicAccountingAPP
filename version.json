@@ -3,8 +3,8 @@
   "min_version": "2.8.0",
   "force_update": false,
   "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.8.0/AccountingPro_Setup_v2.8.0.exe",
-  "changelog": "v2.8.0 - Professional dashboard, mandatory auto-update, HMAC license system, thread-safe DB, pending payments popup, CSV injection fix, crash handling, Inno Setup installer with VC++ auto-download, signed EXE",
-  "release_date": "2026-07-04",
-  "file_size_mb": 39.8,
-  "sha256_hash": "F9E2D8B51E2198882300EB01339BE8DB37995E247AE3E80B9B4C3678CE710AC3"
+  "changelog": "v2.8.0 - Fix: Dark mode theme system (dynamic colors, full recolor), Fix: Preorder address/advance payment fields, Fix: Complete preorder transfers advance to sale paid amount, Fix: Sales search includes customer names, Fix: record_sale @synchronized, Fix: Settings theme toggle reapplies all styles + reloads page, Fix: Sidebar hover colors dynamic",
+  "release_date": "2026-07-11",
+  "file_size_mb": 41.7,
+  "sha256_hash": "a89eccf4e376c3cc614616adcfdbd272c61385692d592f23c9ed31f490b5cc74"
 }
