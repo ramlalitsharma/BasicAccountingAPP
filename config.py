@@ -3,7 +3,7 @@ import sys
 import json
 from pathlib import Path
 
-VERSION = "2.8.0"
+VERSION = "2.9.0"
 APP_NAME = "Accounting Pro"
 APP_GEOMETRY = "1280x780"
 APP_MIN_SIZE = "960x640"
