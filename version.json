@@ -6,5 +6,5 @@
   "changelog": "v2.9.0 - Fix: Purchase items delete + multi-delete support, Fix: Customer delete (removed reference check), Fix: Extra Income save button visibility, Fix: Stock supplier combobox readonly, Fix: Table data alignment & dark mode row colors, Fix: _validate_sheets header corruption, Fix: Sales modal height, New: Horizontal grid lines between table sections, New: Dashboard Total Items card clickable",
   "release_date": "2026-07-11",
   "file_size_mb": 41.7,
-  "sha256_hash": "9e22ad96627480f753f701a2303ab6f9700122bb15fdaf2a43b1cebb6ec07142"
+  "sha256_hash": "99a5054c7f899740568c76cd5e303c375c1e098ada16e93f44e4b06cfc8790e9"
 }

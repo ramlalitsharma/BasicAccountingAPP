@@ -880,14 +880,20 @@ class AccountingApp(tk.Tk):
         ver = status["latest_version"]
         self.update_text.set(
             f"  \u2B06  Update v{ver} available  |  "
-            f"Your version: v{VERSION}"
+            f"Your version: v{VERSION}  |  "
+            f"Click 'Download & Install' to update automatically"
         )
-        self.update_btn.configure(text="Download & Install", command=self._show_update_details_modal)
-        self.update_btn.bind("<Button-1>", lambda e: self._show_update_details_modal())
+        self.update_btn.configure(text="\u2B07  Download & Install",
+                                  command=lambda: self._direct_download_and_install(status))
+        self.update_btn.bind("<Button-1>", lambda e: self._direct_download_and_install(status))
         self.update_btn.bind("<Enter>", lambda e: self.update_btn.configure(bg="#e67e22"))
         self.update_btn.bind("<Leave>", lambda e: self.update_btn.configure(bg="#d35400"))
         self.update_bar.pack(side=tk.TOP, fill=tk.X, before=self.content)
         self._show_sidebar_update_badge(status)
+
+    def _direct_download_and_install(self, status):
+        self._hide_update_bar()
+        self._force_download_and_install(status)
 
     def _show_update_details_modal(self):
         status = get_update_status()
