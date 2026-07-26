@@ -122,7 +122,16 @@ class PreordersPage(ttk.Frame):
         customer_map = {f"{c['Name']} ({c['Contact']})": c["ID"] for c in customers}
 
         stock_items = models.get_stock_items()
-        item_map = {s["Item_Name"]: s["ID"] for s in stock_items}
+
+        def _stock_label(s):
+            name = s.get("Item_Name", "")
+            cat = s.get("Category", "")
+            qty = s.get("Quantity", 0)
+            if cat:
+                return f"{name} - {cat} (Qty: {qty})"
+            return f"{name} (Qty: {qty})"
+
+        item_map = {_stock_label(s): s["ID"] for s in stock_items}
 
         ttk.Label(body, text="Customer").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         customer_var = tk.StringVar()
@@ -282,7 +291,16 @@ class PreordersPage(ttk.Frame):
         customer_rev = {v: k for k, v in customer_map.items()}
 
         stock_items = models.get_stock_items()
-        item_map = {s["Item_Name"]: s["ID"] for s in stock_items}
+
+        def _stock_label(s):
+            name = s.get("Item_Name", "")
+            cat = s.get("Category", "")
+            qty = s.get("Quantity", 0)
+            if cat:
+                return f"{name} - {cat} (Qty: {qty})"
+            return f"{name} (Qty: {qty})"
+
+        item_map = {_stock_label(s): s["ID"] for s in stock_items}
         item_rev = {v: k for k, v in item_map.items()}
 
         ttk.Label(body, text="Customer").grid(row=0, column=0, padx=10, pady=8, sticky="w")

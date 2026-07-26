@@ -156,9 +156,17 @@ class SalesPage(ttk.Frame):
         body = app.show_modal("New Sale", width=500, height=530)
 
         stock_items = models.get_stock_items()
-        item_map = {f"{s['Item_Name']} (Qty: {s['Quantity']})": s["ID"]
-                    for s in stock_items}
-        item_price_map = {f"{s['Item_Name']} (Qty: {s['Quantity']})": s.get("Selling_Price", 0)
+
+        def _stock_label(s):
+            name = s.get("Item_Name", "")
+            cat = s.get("Category", "")
+            qty = s.get("Quantity", 0)
+            if cat:
+                return f"{name} - {cat} (Qty: {qty})"
+            return f"{name} (Qty: {qty})"
+
+        item_map = {_stock_label(s): s["ID"] for s in stock_items}
+        item_price_map = {_stock_label(s): s.get("Selling_Price", 0)
                           for s in stock_items}
 
         customers = models.get_customers()

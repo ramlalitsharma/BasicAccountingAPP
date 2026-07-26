@@ -450,6 +450,37 @@ def get_categories():
     return sorted(cats)
 
 
+def get_categories_for_item(item_name):
+    if not item_name:
+        return []
+    wb = _get_wb()
+    data = _sheet_to_dicts(wb["Stock"])
+    wb.close()
+    cats = []
+    seen = set()
+    for r in data:
+        if str(r.get("Item_Name", "")).strip().lower() == item_name.strip().lower():
+            c = r.get("Category", "")
+            if c and c not in seen:
+                cats.append(c)
+                seen.add(c)
+    return cats
+
+
+def get_item_names():
+    wb = _get_wb()
+    data = _sheet_to_dicts(wb["Stock"])
+    wb.close()
+    names = []
+    seen = set()
+    for r in data:
+        n = r.get("Item_Name", "")
+        if n and n not in seen:
+            names.append(n)
+            seen.add(n)
+    return sorted(names)
+
+
 # ---- SALES ----
 
 @synchronized

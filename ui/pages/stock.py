@@ -142,31 +142,73 @@ class StockPage(ttk.Frame):
 
     def _add_form(self):
         app = self.winfo_toplevel()
-        body = app.show_modal("Add Stock Item", width=500, height=420)
+        body = app.show_modal("Add Stock Item", width=520, height=560)
+
+        try:
+            existing_items = models.get_stock_items()
+            existing_categories = models.get_categories()
+        except FileNotFoundError:
+            existing_items = []
+            existing_categories = []
+        existing_item_names = sorted({s.get("Item_Name", "") for s in existing_items if s.get("Item_Name")})
 
         fields = {}
         row = 0
-        for label, key in [("Item Name", "item_name"),
-                           ("Category", "category"),
-                           ("Quantity", "quantity"),
+        ttk.Label(body, text="Item Name").grid(row=row, column=0, padx=10,
+                                               pady=8, sticky="w")
+        item_name_combo = ttk.Combobox(body, values=existing_item_names, width=38)
+        item_name_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+        fields["item_name"] = item_name_combo
+        row += 1
+
+        ttk.Label(body, text="Category").grid(row=row, column=0, padx=10,
+                                               pady=8, sticky="w")
+        category_var = tk.StringVar()
+        category_combo = ttk.Combobox(body, textvariable=category_var,
+                                      values=existing_categories,
+                                      width=38)
+        category_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+        fields["category"] = category_combo
+        row += 1
+
+        def _on_item_name_change(*args):
+            current = item_name_combo.get().strip()
+            if not current:
+                return
+            try:
+                cat_list = models.get_categories_for_item(current)
+            except FileNotFoundError:
+                cat_list = []
+            if cat_list:
+                category_combo["values"] = cat_list
+                if category_var.get() not in cat_list:
+                    category_var.set(cat_list[0])
+            else:
+                category_combo["values"] = existing_categories
+        item_name_combo.bind("<<ComboboxSelected>>", lambda e: _on_item_name_change())
+        item_name_combo.bind("<FocusOut>", lambda e: _on_item_name_change())
+        item_name_combo.bind("<KeyRelease>", lambda e: _on_item_name_change())
+
+        for label, key in [("Quantity", "quantity"),
                            ("Min Quantity", "min_quantity"),
                            ("Purchase Price", "purchase_price"),
                            ("Selling Price", "selling_price")]:
             ttk.Label(body, text=label).grid(row=row, column=0, padx=10,
-                                             pady=6, sticky="w")
-            entry = ttk.Entry(body, width=35)
-            entry.grid(row=row, column=1, padx=10, pady=6, sticky="ew")
+                                             pady=8, sticky="w")
+            entry = ttk.Entry(body, width=38)
+            entry.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
             fields[key] = entry
             row += 1
 
         ttk.Label(body, text="Supplier").grid(row=row, column=0, padx=10,
-                                              pady=6, sticky="w")
+                                              pady=8, sticky="w")
         suppliers = models.get_suppliers()
         supplier_names = {s["Name"]: s["ID"] for s in suppliers}
         supplier_var = tk.StringVar()
-        ttk.Combobox(body, textvariable=supplier_var,
-                     values=[""] + list(supplier_names.keys()),
-                     state="readonly", width=32).grid(row=row, column=1, padx=10, pady=6, sticky="ew")
+        supplier_combo = ttk.Combobox(body, textvariable=supplier_var,
+                                       values=[""] + list(supplier_names.keys()),
+                                       state="normal", width=38)
+        supplier_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
 
         def save():
             name = fields["item_name"].get().strip()
@@ -193,12 +235,14 @@ class StockPage(ttk.Frame):
             except (ValueError, TypeError):
                 messagebox.showerror("Input Error", "Please enter a valid number for Min Quantity.")
                 return
+            chosen_supplier_name = supplier_var.get().strip()
+            supplier_id = supplier_names.get(chosen_supplier_name) if chosen_supplier_name else None
             try:
                 models.add_stock_item(
-                    name, fields["category"].get(),
+                    name, fields["category"].get().strip(),
                     qty, purchase_price, selling_price,
                     min_qty,
-                    supplier_names.get(supplier_var.get()),
+                    supplier_id,
                 )
             except PermissionError as e:
                 messagebox.showerror("Update Required", str(e))
@@ -210,8 +254,9 @@ class StockPage(ttk.Frame):
             self.refresh()
             messagebox.showinfo("Success", "Item added")
 
+        save_row = row + 1
         ttk.Button(body, text="Save", command=save).grid(
-            row=row, column=0, columnspan=2, pady=15)
+            row=save_row, column=0, columnspan=2, pady=(20, 10))
         body.grid_columnconfigure(1, weight=1)
 
     def _edit_form(self):
@@ -224,29 +269,72 @@ class StockPage(ttk.Frame):
             return
 
         app = self.winfo_toplevel()
-        body = app.show_modal("Edit Stock Item", width=500, height=420)
+        body = app.show_modal("Edit Stock Item", width=520, height=560)
+
+        try:
+            existing_items = models.get_stock_items()
+            existing_categories = models.get_categories()
+        except FileNotFoundError:
+            existing_items = []
+            existing_categories = []
+        existing_item_names = sorted({s.get("Item_Name", "") for s in existing_items if s.get("Item_Name")})
 
         fields = {}
         row = 0
-        for label, key in [("Item Name", "Item_Name"), ("Category", "Category"),
-                           ("Quantity", "Quantity"), ("Min Quantity", "Min_Quantity"),
+        ttk.Label(body, text="Item Name").grid(row=row, column=0, padx=10,
+                                               pady=8, sticky="w")
+        item_name_combo = ttk.Combobox(body, values=existing_item_names, width=38)
+        current_name = item.get("Item_Name", "")
+        item_name_combo.set(current_name)
+        item_name_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+        fields["Item_Name"] = item_name_combo
+        row += 1
+
+        ttk.Label(body, text="Category").grid(row=row, column=0, padx=10,
+                                               pady=8, sticky="w")
+        category_var = tk.StringVar(value=item.get("Category", ""))
+        category_combo = ttk.Combobox(body, textvariable=category_var,
+                                      values=existing_categories, width=38)
+        category_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+        fields["Category"] = category_combo
+        row += 1
+
+        def _on_item_name_change(*args):
+            current = item_name_combo.get().strip()
+            if not current or current == current_name:
+                return
+            try:
+                cat_list = models.get_categories_for_item(current)
+            except FileNotFoundError:
+                cat_list = []
+            if cat_list:
+                category_combo["values"] = cat_list
+                if category_var.get() not in cat_list:
+                    category_var.set(cat_list[0])
+        item_name_combo.bind("<<ComboboxSelected>>", lambda e: _on_item_name_change())
+        item_name_combo.bind("<FocusOut>", lambda e: _on_item_name_change())
+
+        for label, key in [("Quantity", "Quantity"),
+                           ("Min Quantity", "Min_Quantity"),
                            ("Purchase Price", "Purchase_Price"),
                            ("Selling Price", "Selling_Price")]:
-            ttk.Label(body, text=label).grid(row=row, column=0, padx=10, pady=6, sticky="w")
-            entry = ttk.Entry(body, width=35)
+            ttk.Label(body, text=label).grid(row=row, column=0, padx=10,
+                                             pady=8, sticky="w")
+            entry = ttk.Entry(body, width=38)
             entry.insert(0, str(item.get(key, "")))
-            entry.grid(row=row, column=1, padx=10, pady=6, sticky="ew")
+            entry.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
             fields[key] = entry
             row += 1
 
         suppliers = models.get_suppliers()
         supplier_names = {s["Name"]: s["ID"] for s in suppliers}
         supplier_var = tk.StringVar()
-        ttk.Label(body, text="Supplier").grid(row=row, column=0, padx=10, pady=6, sticky="w")
-        combo = ttk.Combobox(body, textvariable=supplier_var,
-                              values=[""] + list(supplier_names.keys()),
-                              state="normal", width=32)
-        combo.grid(row=row, column=1, padx=10, pady=6, sticky="ew")
+        ttk.Label(body, text="Supplier").grid(row=row, column=0, padx=10,
+                                              pady=8, sticky="w")
+        supplier_combo = ttk.Combobox(body, textvariable=supplier_var,
+                                       values=[""] + list(supplier_names.keys()),
+                                       state="normal", width=38)
+        supplier_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
         if item.get("supplier_name"):
             supplier_var.set(item["supplier_name"])
 
@@ -275,11 +363,13 @@ class StockPage(ttk.Frame):
             except (ValueError, TypeError):
                 messagebox.showerror("Input Error", "Please enter a valid number for Selling Price.")
                 return
+            chosen_supplier_name = supplier_var.get().strip()
+            supplier_id = supplier_names.get(chosen_supplier_name) if chosen_supplier_name else None
             try:
                 models.update_stock_item(
-                    item_id, name, fields["Category"].get(),
+                    item_id, name, fields["Category"].get().strip(),
                     qty, min_qty, purchase_price, selling_price,
-                    supplier_names.get(supplier_var.get()),
+                    supplier_id,
                 )
             except PermissionError as e:
                 messagebox.showerror("Update Required", str(e))
@@ -292,7 +382,7 @@ class StockPage(ttk.Frame):
             messagebox.showinfo("Success", "Item updated")
 
         ttk.Button(body, text="Update", command=save).grid(
-            row=row + 1, column=0, columnspan=2, pady=15)
+            row=row + 1, column=0, columnspan=2, pady=(20, 10))
         body.grid_columnconfigure(1, weight=1)
 
     def _delete(self):

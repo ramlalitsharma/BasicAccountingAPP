@@ -88,10 +88,19 @@ class PurchasesPage(ttk.Frame):
 
     def _add_form(self):
         app = self.winfo_toplevel()
-        body = app.show_modal("Record Purchase", width=500, height=300)
+        body = app.show_modal("Record Purchase", width=540, height=350)
 
         stock_items = models.get_stock_items()
-        item_map = {s["Item_Name"]: s["ID"] for s in stock_items}
+
+        def _stock_label(s):
+            name = s.get("Item_Name", "")
+            cat = s.get("Category", "")
+            qty = s.get("Quantity", 0)
+            if cat:
+                return f"{name} - {cat} (Qty: {qty})"
+            return f"{name} (Qty: {qty})"
+
+        item_map = {_stock_label(s): s["ID"] for s in stock_items}
 
         ttk.Label(body, text="Item").grid(row=0, column=0, padx=10,
                                           pady=8, sticky="w")

@@ -3,8 +3,8 @@
   "min_version": "2.8.0",
   "force_update": false,
   "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.9.0/AccountingPro_Setup_v2.9.0.exe",
-  "changelog": "v2.9.0 - Security: HTML escaping (XSS fix), CSV import error handling, Excel formula injection sanitization; Fix: Wrong dict keys in sales _print_bill (customer_name, paid_amount, unpaid_amount); Fix: Purchase items delete + multi-delete support; Fix: Customer delete; Fix: Extra Income save button visibility; New: Professional HTML receipt; New: One-click auto download & install; New: Grid lines between table sections; New: Dashboard Total Items card clickable",
-  "release_date": "2026-07-11",
+  "changelog": "v2.9.0 - Fix: Stock Add/Edit modal layout (Save button no longer overlaps Supplier); New: Stock Item Name + Category cascading autocomplete; New: Sales/Purchase/Preorder dropdowns now show Item Name - Category so multiple variants of same item (e.g., Rice Basmati, Rice Brown) are distinguishable for sellers; Security: HTML escaping, CSV import error handling, Excel formula injection sanitization; Professional HTML receipt; One-click auto update; Purchase multi-delete; Customer delete; Grid lines; Dashboard Total Items clickable",
+  "release_date": "2026-07-27",
    "file_size_mb": 41.7,
-  "sha256_hash": "3c62df1bf84900071e3ecd53b457df5e8848d3d13bd6e7bf6eab858196dcd603"
+  "sha256_hash": "e2be5fa4ba39c8c5f79c7253b8482091d2d1430558b476a19c3359bfd6eca474"
 }

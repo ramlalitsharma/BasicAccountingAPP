@@ -3,6 +3,7 @@ from database.excel_db import (
     add_supplier, get_suppliers, get_supplier, update_supplier, delete_supplier,
     add_stock_item, get_stock_items, get_stock_item, update_stock_item,
     delete_stock_item, get_low_stock_items, get_categories,
+    get_categories_for_item, get_item_names,
     record_sale, return_sale, delete_sale, get_sales, get_daily_sales,
     get_monthly_report, get_yearly_report, get_dashboard_stats,
     get_stock_log, get_year_months, format_invoice_id,
