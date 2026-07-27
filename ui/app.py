@@ -831,10 +831,16 @@ class AccountingApp(tk.Tk):
                     filepath = result["path"]
                     expected_hash = status.get("sha256_hash", "")
                     if expected_hash and not verify_download(filepath, expected_hash):
-                        messagebox.showerror("Verification Failed",
-                                             "Downloaded file is corrupted or tampered with.\n"
-                                             "Please download manually from our website.")
+                        status_lbl.config(text="Verification failed. Opening download page...")
+                        self.toast.show(
+                            "Verification failed (release may not match latest). Opening download page.",
+                            "warning", 6000)
+                        try:
+                            os.remove(filepath)
+                        except OSError:
+                            pass
                         self.close_modal()
+                        self._open_update_url(url)
                         return
                     status_lbl.config(text="Installing update...")
                     self.after(800, lambda: self._apply_update_and_quit(filepath))
