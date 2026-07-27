@@ -415,11 +415,14 @@ class AccountingApp(tk.Tk):
             self.update_bar, textvariable=self.update_text,
             font=(FONT_FAMILY, FONT_SIZE_MD), bg=WARNING_COLOR, fg="white", anchor="w")
         self.update_lbl.pack(side=tk.LEFT, padx=12, fill=tk.X, expand=True)
-        self.update_btn = tk.Label(
+        self.update_btn = tk.Button(
             self.update_bar, text="View Update \u2197",
-            font=(FONT_FAMILY, FONT_SIZE_MD, "bold"), bg="#d35400", fg="white",
-            padx=10, cursor="hand2")
-        self.update_btn.pack(side=tk.RIGHT, padx=4)
+            font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
+            bg="#d35400", fg="white", activebackground="#e67e22",
+            activeforeground="white", relief=tk.FLAT, bd=0,
+            padx=14, pady=4, cursor="hand2",
+            command=lambda: self._handle_update_btn_click())
+        self.update_btn.pack(side=tk.RIGHT, padx=4, pady=4)
         self.dismiss_btn = tk.Label(
             self.update_bar, text="",
             font=(FONT_FAMILY, FONT_SIZE_MD), bg=WARNING_COLOR, fg="white",
@@ -831,16 +834,28 @@ class AccountingApp(tk.Tk):
                     filepath = result["path"]
                     expected_hash = status.get("sha256_hash", "")
                     if expected_hash and not verify_download(filepath, expected_hash):
-                        status_lbl.config(text="Verification failed. Opening download page...")
-                        self.toast.show(
-                            "Verification failed (release may not match latest). Opening download page.",
-                            "warning", 6000)
+                        downloaded_hash = get_file_hash(filepath) if 'get_file_hash' in dir() else ""
+                        status_lbl.config(text="Verification failed. Offering options...")
                         try:
                             os.remove(filepath)
                         except OSError:
                             pass
                         self.close_modal()
-                        self._open_update_url(url)
+                        choice = messagebox.askyesno(
+                            "Update Verification Failed",
+                            "The downloaded installer does not match the expected hash.\n\n"
+                            "This usually happens when the GitHub release has not been \n"
+                            "uploaded yet for the latest version.\n\n"
+                            "Open the GitHub release page in your browser so you can \n"
+                            "manually download and run the installer?\n\n"
+                            "(Click 'Yes' to open browser, 'No' to keep using current version.)"
+                        )
+                        if choice:
+                            self._open_update_url(url)
+                        else:
+                            self.toast.show(
+                                "Update cancelled. Will retry on next check.",
+                                "info", 4000)
                         return
                     status_lbl.config(text="Installing update...")
                     self.after(800, lambda: self._apply_update_and_quit(filepath))
@@ -890,12 +905,17 @@ class AccountingApp(tk.Tk):
             f"Click 'Download & Install' to update automatically"
         )
         self.update_btn.configure(text="\u2B07  Download & Install",
-                                  command=lambda: self._direct_download_and_install(status))
-        self.update_btn.bind("<Button-1>", lambda e: self._direct_download_and_install(status))
-        self.update_btn.bind("<Enter>", lambda e: self.update_btn.configure(bg="#e67e22"))
-        self.update_btn.bind("<Leave>", lambda e: self.update_btn.configure(bg="#d35400"))
+                                  command=lambda: self._handle_update_btn_click())
         self.update_bar.pack(side=tk.TOP, fill=tk.X, before=self.content)
         self._show_sidebar_update_badge(status)
+
+    def _handle_update_btn_click(self):
+        try:
+            self.update_btn.config(state=tk.DISABLED)
+        except tk.TclError:
+            pass
+        status = get_update_status()
+        self._direct_download_and_install(status)
 
     def _direct_download_and_install(self, status):
         self._hide_update_bar()
