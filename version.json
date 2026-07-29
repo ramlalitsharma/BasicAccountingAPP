@@ -3,8 +3,8 @@
   "min_version": "2.8.0",
   "force_update": false,
   "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.9.0/AccountingPro_Setup_v2.9.0.exe",
-  "changelog": "v2.9.0 - Fix: Stock Add/Edit modal layout (Save button no longer overlaps Supplier); New: Stock Item Name + Category cascading autocomplete; New: Sales/Purchase/Preorder dropdowns now show Item Name - Category so multiple variants of same item (e.g., Rice Basmati, Rice Brown) are distinguishable for sellers; Security: HTML escaping, CSV import error handling, Excel formula injection sanitization; Professional HTML receipt; One-click auto update; Purchase multi-delete; Customer delete; Grid lines; Dashboard Total Items clickable",
-  "release_date": "2026-07-27",
-   "file_size_mb": 41.7,
-  "sha256_hash": "99a5054c7f899740568c76cd5e303c375c1e098ada16e93f44e4b06cfc8790e9"
+  "changelog": "v2.9.0 - First-run setup wizard (Business Type + Country + Tax); Tax engine (India GST with CGST/SGST/IGST, Nepal VAT, or None); Industry verticals (General, Kirana, Pharmacy, Tailoring, Restaurant); Feature flags; Sidebar filtering; Settings expanded with Business/Vertical/Features/Tax tabs; Tax-aware HTML receipts",
+  "release_date": "2026-07-29",
+  "file_size_mb": 41.7,
+  "sha256_hash": "73e4f63b11a654bf31432830f94818b5d658a547f4f9500454488a3c22bac8f0"
 }
