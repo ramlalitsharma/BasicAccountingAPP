@@ -28,6 +28,10 @@ class SettingsPage(ttk.Frame):
         self._notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
 
         self._general_tab(self._notebook)
+        self._business_tab(self._notebook)
+        self._vertical_tab(self._notebook)
+        self._features_tab(self._notebook)
+        self._tax_tab(self._notebook)
         self._company_tab(self._notebook)
         self._backup_tab(self._notebook)
         self._license_tab(self._notebook)
@@ -411,3 +415,128 @@ class SettingsPage(ttk.Frame):
             app.toast.show(f"Theme changed to {theme}", "success", 3000)
         except tk.TclError:
             pass
+
+    # ========== NEW TABS (Business, Vertical, Features, Tax) ==========
+
+    def _business_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Business  ")
+        tk.Label(frame, text="Invoice Settings", font=(FONT_FAMILY, 12, "bold"),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w")
+        tk.Label(frame, text="Invoice No. Prefix", font=(FONT_FAMILY, 10)).pack(anchor="w", pady=(8, 2))
+        self._inv_pref_var = tk.StringVar(value=get_setting("business.invoice_no_prefix", "INV"))
+        tk.Entry(frame, textvariable=self._inv_pref_var, width=15, font=(FONT_FAMILY, 10)).pack(anchor="w")
+        tk.Label(frame, text="Default Low-Stock Threshold", font=(FONT_FAMILY, 10)).pack(anchor="w", pady=(12, 2))
+        self._low_stock_var = tk.StringVar(value=str(get_setting("business.low_stock_threshold_default", 5)))
+        tk.Entry(frame, textvariable=self._low_stock_var, width=10, font=(FONT_FAMILY, 10)).pack(anchor="w")
+        self._show_tax_recpt_var = tk.BooleanVar(value=get_setting("business.show_tax_breakdown_on_receipt", True))
+        tk.Checkbutton(frame, text="Show tax breakdown on receipt", variable=self._show_tax_recpt_var, bg=CARD_BG, font=(FONT_FAMILY, 10), activebackground=CARD_BG).pack(anchor="w", pady=(14, 0))
+        tk.Button(frame, text="Save Business Settings", command=self._save_business, font=(FONT_FAMILY, 10, "bold")).pack(anchor="w", pady=(16, 0))
+
+    def _save_business(self):
+        set_setting("business.invoice_no_prefix", self._inv_pref_var.get().strip())
+        try:
+            set_setting("business.low_stock_threshold_default", int(self._low_stock_var.get()))
+        except ValueError:
+            pass
+        set_setting("business.show_tax_breakdown_on_receipt", bool(self._show_tax_recpt_var.get()))
+        messagebox.showinfo("Saved", "Business settings saved")
+
+    def _vertical_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Vertical  ")
+        tk.Label(frame, text="Business Type", font=(FONT_FAMILY, 12, "bold"), bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 8))
+        tk.Label(frame, text="Choose your industry. This enables appropriate features and fields.", font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(anchor="w", pady=(0, 8))
+        from utils.verticals import list_verticals
+        current = get_setting("vertical", "general")
+        self._v_sel_var = tk.StringVar(value=current)
+        for key, name, icon, desc in list_verticals():
+            tk.Radiobutton(frame, text=icon + "  " + name, variable=self._v_sel_var, value=key, bg=CARD_BG, font=(FONT_FAMILY, 10), selectcolor=CARD_BG, activebackground=CARD_BG).pack(anchor="w", pady=2)
+        tk.Button(frame, text="Apply Vertical", command=self._apply_vertical, font=(FONT_FAMILY, 10, "bold")).pack(anchor="w", pady=(12, 0))
+        tk.Label(frame, text="You can also re-run the setup wizard", font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(anchor="w", pady=(4, 0))
+        tk.Button(frame, text="Re-Run Setup Wizard", command=self._run_wizard, font=(FONT_FAMILY, 10)).pack(anchor="w", pady=(2, 0))
+
+    def _apply_vertical(self):
+        vertical = self._v_sel_var.get()
+        from utils.settings_helper import update_features_from_vertical
+        update_features_from_vertical(vertical)
+        self._app._apply_sidebar_visibility()
+        self._app.reload_current_page()
+        messagebox.showinfo("Vertical Updated", "Features have been updated. Fine-tune in Features tab.")
+
+    def _run_wizard(self):
+        from ui.wizard import FirstRunWizard
+        FirstRunWizard().run(self._app)
+        self._app._apply_sidebar_visibility()
+        self._app.reload_current_page()
+
+    def _features_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Features  ")
+        tk.Label(frame, text="Feature Flags", font=(FONT_FAMILY, 12, "bold"), bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 4))
+        tk.Label(frame, text="Enable/disable individual features. Some features depend on the vertical.", font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(anchor="w", pady=(0, 8))
+        from utils.verticals import ALL_FEATURES
+        self._feat_vars = {}
+        for fid, name, desc in ALL_FEATURES:
+            row = tk.Frame(frame, bg=CARD_BG)
+            row.pack(fill="x", pady=2)
+            var = tk.BooleanVar(value=get_setting("feature_flags." + fid, False))
+            self._feat_vars[fid] = var
+            tk.Checkbutton(row, text=name, variable=var, bg=CARD_BG, font=(FONT_FAMILY, 10, "bold"), activebackground=CARD_BG, selectcolor=CARD_BG).pack(side=tk.LEFT)
+            tk.Label(row, text=desc, font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(side=tk.LEFT, padx=(8, 0))
+        tk.Button(frame, text="Save Feature Settings", command=self._save_features, font=(FONT_FAMILY, 10, "bold")).pack(anchor="w", pady=(12, 0))
+
+    def _save_features(self):
+        for fid, var in self._feat_vars.items():
+            set_setting("feature_flags." + fid, bool(var.get()))
+        self._app._apply_sidebar_visibility()
+        self._app.reload_current_page()
+        messagebox.showinfo("Saved", "Feature flags saved")
+
+    def _tax_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Tax  ")
+        row_frame = tk.Frame(frame, bg=CARD_BG)
+        row_frame.pack(fill="x", pady=(0, 8))
+        tk.Label(row_frame, text="Country / Tax System", font=(FONT_FAMILY, 12, "bold"), bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w")
+        country = get_setting("country", "India")
+        self._c_var = tk.StringVar(value=country)
+        for name in ["India", "Nepal", "None"]:
+            tk.Radiobutton(row_frame, text=name, variable=self._c_var, value=name, bg=CARD_BG, font=(FONT_FAMILY, 10), selectcolor=CARD_BG, activebackground=CARD_BG, command=self._on_country_change).pack(anchor="w", pady=2)
+        self._tax_enabled_var = tk.BooleanVar(value=get_setting("feature_flags.tax_system", True))
+        tk.Checkbutton(frame, text="Enable Tax (show on invoices)", variable=self._tax_enabled_var, bg=CARD_BG, font=(FONT_FAMILY, 10), activebackground=CARD_BG, selectcolor=CARD_BG).pack(anchor="w", pady=(4, 8))
+        self._tax_rate_frame = tk.Frame(frame, bg=CARD_BG)
+        self._tax_rate_frame.pack(fill="x")
+        tk.Label(self._tax_rate_frame, text="Default Tax Rate (%)", font=(FONT_FAMILY, 10, "bold"), bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w")
+        self._rate_var = tk.StringVar(value=str(get_setting("tax.default_rate_percent", 18)))
+        tk.Entry(self._tax_rate_frame, textvariable=self._rate_var, width=8, font=(FONT_FAMILY, 10)).pack(anchor="w", pady=(2, 0))
+        tk.Button(frame, text="Save Tax Settings", command=self._save_tax, font=(FONT_FAMILY, 10, "bold")).pack(anchor="w", pady=(12, 0))
+
+    def _on_country_change(self):
+        val = self._c_var.get()
+        if val == "India":
+            self._tax_enabled_var.set(True)
+            self._rate_var.set("18")
+        elif val == "Nepal":
+            self._tax_enabled_var.set(True)
+            self._rate_var.set("13")
+        elif val == "None":
+            self._tax_enabled_var.set(False)
+            self._rate_var.set("0")
+        if val == "India":
+            set_setting("currency_symbol", "\u20B9")
+        elif val == "Nepal":
+            set_setting("currency_symbol", "Rs.")
+        else:
+            set_setting("currency_symbol", "$")
+
+    def _save_tax(self):
+        set_setting("country", self._c_var.get())
+        set_setting("feature_flags.tax_system", bool(self._tax_enabled_var.get()))
+        try:
+            set_setting("tax.default_rate_percent", float(self._rate_var.get()))
+        except ValueError:
+            pass
+        set_setting("first_run", False)
+        self._app.reload_current_page()
+        messagebox.showinfo("Saved", "Tax settings saved")

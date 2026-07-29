@@ -46,22 +46,28 @@ def _render_html(sale_data):
     paid_amt = sale_data.get("paid_amount", total) or 0
     unpaid_amt = sale_data.get("unpaid_amount", 0) or 0
 
+    from utils.tax import get_tax_engine, is_tax_enabled, get_default_rate
+    engine = get_tax_engine()
+    is_interstate = bool(sale_data.get("is_interstate", False))
+    tax_rate = float(sale_data.get("tax_rate_percent", get_default_rate()))
     tax_rows = ""
-    if has_gst:
-        total_val = sale_data.get("total", 0)
-        taxable = round(total_val / 1.18, 2) if total_val else 0
-        cgst_amt = round(taxable * 0.09, 2)
-        sgst_amt = round(taxable * 0.09, 2)
-        tax_rows = f"""
-        <tr><td>Taxable Amount</td><td class="amt">{format_currency(taxable)}</td></tr>
-        <tr><td>CGST @ 9%</td><td class="amt">{format_currency(cgst_amt)}</td></tr>
-        <tr><td>SGST @ 9%</td><td class="amt">{format_currency(sgst_amt)}</td></tr>"""
-
-    payment_rows = ""
-    if payment_status.lower() != "paid":
-        payment_rows = f"""
-        <tr><td>Paid</td><td class="amt">{format_currency(paid_amt)}</td></tr>
-        <tr><td>Balance</td><td class="amt">{format_currency(unpaid_amt)}</td></tr>"""
+    grand_total = total
+    if tax_rate > 0 and is_tax_enabled():
+        breakdown = engine.compute_tax_breakdown(
+            subtotal=total, rate_percent=tax_rate, is_interstate=is_interstate,
+            qty=qty, unit_price=price,
+        )
+        taxable = round(total - breakdown["tax_amount"], 2)
+        tax_amount_total = breakdown["tax_amount"]
+        grand_total = round(total + tax_amount_total, 2)
+        rows = [
+            f'<tr><td>Taxable Amount</td><td class="amt">{format_currency(taxable)}</td</tr>'
+        ]
+        for comp in breakdown["components"]:
+            rows.append(
+                f'<tr><td>{_h(comp["label"])}</td><td class="amt">{format_currency(comp["amount"])}</td</tr>'
+            )
+        tax_rows = "\n        ".join(rows)
 
     eh = _h
     addr_parts = [eh(caddr)]
@@ -176,7 +182,7 @@ def _render_html(sale_data):
         <td>{eh(item)}{f' <br><span style="font-size:12px;color:#94a3b8;">{eh(category)}</span>' if category else ''}</td>
         <td class="amt">{qty}</td>
         <td class="amt">{format_currency(price)}</td>
-        <td class="amt">{format_currency(total)}</td>
+        <td class="amt">{format_currency(grand_total)}</td>
       </tr>
     </tbody>
   </table>

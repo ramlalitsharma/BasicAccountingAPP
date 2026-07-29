@@ -62,6 +62,19 @@ NAV_ITEMS = [
 ]
 
 
+# Maps each page to a function that returns True if it should be visible
+# based on current feature flags / vertical. The dashboard, stock, customers,
+# suppliers, purchases, sales, settings are always-on; the others are core.
+def _is_page_visible(page_key: str) -> bool:
+    """Filter sidebar pages based on enabled features."""
+    from utils.settings_helper import is_feature_enabled
+    always_active = {"dashboard", "stock", "sales", "customers", "suppliers",
+                     "purchases", "reports", "settings", "extra_income"}
+    if page_key in always_active:
+        return True
+    return True
+
+
 class AccountingApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -102,7 +115,31 @@ class AccountingApp(tk.Tk):
         backup_interval = get_setting("backup_interval_minutes", 30)
         start_auto_backup(backup_interval)
         self.after(300, self._initial_file_setup)
+        self.after(400, self._maybe_run_first_run_wizard)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _maybe_run_first_run_wizard(self):
+        try:
+            from utils.settings_helper import ensure_settings_initialized
+            ensure_settings_initialized()
+            from config import get_setting
+            if get_setting("first_run", True):
+                from ui.wizard import FirstRunWizard
+                wiz = FirstRunWizard()
+                wiz.run(self)
+                self.reload_all_pages()
+        except Exception as exc:
+            print(f"First-run wizard failed: {exc}")
+
+    def reload_all_pages(self):
+        """Rebuild all pages (used after settings change)."""
+        for key, page in list(self._pages.items()):
+            try:
+                page.destroy()
+            except tk.TclError:
+                pass
+        self._pages = {}
+        self._navigate(self._current_page_key or "dashboard")
 
     def _setup_custom_titlebar(self):
         tb = tk.Frame(self, bg=PRIMARY_COLOR, height=34)
@@ -205,9 +242,11 @@ class AccountingApp(tk.Tk):
         nav_frame.pack(fill=tk.BOTH, expand=True, pady=4)
 
         self._nav_indicators = {}
+        self._nav_frames = {}
         for key, label in NAV_ITEMS:
             item_frame = tk.Frame(nav_frame, bg=SIDEBAR_BG)
             item_frame.pack(fill=tk.X, padx=0, pady=0)
+            self._nav_frames[key] = item_frame
 
             indicator = tk.Frame(item_frame, bg=SIDEBAR_BG, width=3)
             indicator.pack(side=tk.LEFT, fill=tk.Y)
@@ -224,8 +263,24 @@ class AccountingApp(tk.Tk):
             btn.bind("<Enter>", lambda e, b=btn, ind=indicator: self._on_nav_hover(b, ind))
             btn.bind("<Leave>", lambda e, b=btn, ind=indicator: self._on_nav_leave(b, ind))
 
-            self._nav_buttons[key] = btn
-            self._nav_indicators[key] = indicator
+        self._nav_buttons[key] = btn
+        self._nav_indicators[key] = indicator
+
+        self._apply_sidebar_visibility()
+
+    def _apply_sidebar_visibility(self):
+        """Show or hide nav items based on current settings (vertical & features)."""
+        if not hasattr(self, "_nav_frames"):
+            return
+        for key, frame in self._nav_frames.items():
+            try:
+                visible = _is_page_visible(key)
+                if visible:
+                    frame.pack(fill=tk.X, padx=0, pady=0)
+                else:
+                    frame.pack_forget()
+            except tk.TclError:
+                pass
 
         bottom_frame = tk.Frame(sidebar, bg=SIDEBAR_BG)
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.X)
@@ -597,6 +652,10 @@ class AccountingApp(tk.Tk):
                 del self._pages[key]
             for widget in self.content.winfo_children():
                 widget.destroy()
+            try:
+                self._apply_sidebar_visibility()
+            except tk.TclError:
+                pass
             self._navigate(key)
 
     def _navigate(self, page_key):
