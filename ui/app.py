@@ -266,22 +266,6 @@ class AccountingApp(tk.Tk):
         self._nav_buttons[key] = btn
         self._nav_indicators[key] = indicator
 
-        self._apply_sidebar_visibility()
-
-    def _apply_sidebar_visibility(self):
-        """Show or hide nav items based on current settings (vertical & features)."""
-        if not hasattr(self, "_nav_frames"):
-            return
-        for key, frame in self._nav_frames.items():
-            try:
-                visible = _is_page_visible(key)
-                if visible:
-                    frame.pack(fill=tk.X, padx=0, pady=0)
-                else:
-                    frame.pack_forget()
-            except tk.TclError:
-                pass
-
         bottom_frame = tk.Frame(sidebar, bg=SIDEBAR_BG)
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -319,6 +303,22 @@ class AccountingApp(tk.Tk):
             cursor="hand2")
         self.update_side_lbl.pack(fill=tk.X, padx=10, pady=(0, 4))
         self.update_side_lbl.pack_forget()
+
+        self._apply_sidebar_visibility()
+
+    def _apply_sidebar_visibility(self):
+        """Show or hide nav items based on current settings (vertical & features)."""
+        if not hasattr(self, "_nav_frames"):
+            return
+        for key, frame in self._nav_frames.items():
+            try:
+                visible = _is_page_visible(key)
+                if visible:
+                    frame.pack(fill=tk.X, padx=0, pady=0)
+                else:
+                    frame.pack_forget()
+            except tk.TclError:
+                pass
 
     def _setup_status_bar(self):
         self.status_bar = tk.Frame(self, bg=BG_DARK, height=28)

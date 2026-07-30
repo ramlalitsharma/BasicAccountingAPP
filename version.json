@@ -2,9 +2,9 @@
   "latest_version": "2.9.0",
   "min_version": "2.8.0",
   "force_update": false,
-  "download_url": "https://gofile.io/d/IsJkkd",
+  "download_url": "https://gofile.io/d/8YRiDz",
   "changelog": "v2.9.0 - First-run setup wizard (Business Type + Country + Tax); Tax engine (India GST with CGST/SGST/IGST, Nepal VAT, or None); Industry verticals (General, Kirana, Pharmacy, Tailoring, Restaurant); Feature flags; Sidebar filtering; Settings expanded with Business/Vertical/Features/Tax tabs; Tax-aware HTML receipts. Download: https://gofile.io/d/IsJkkd",
-  "release_date": "2026-07-29",
+  "release_date": "2026-07-30",
   "file_size_mb": 41.7,
   "sha256_hash": "f007df1b735679d40c93c66abb9097bb"
 }
