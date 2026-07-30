@@ -2,9 +2,9 @@
   "latest_version": "2.9.0",
   "min_version": "2.8.0",
   "force_update": false,
-  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.9.0/AccountingPro_Setup_v2.9.0.exe",
-  "changelog": "v2.9.0 - First-run setup wizard (Business Type + Country + Tax); Tax engine (India GST with CGST/SGST/IGST, Nepal VAT, or None); Industry verticals (General, Kirana, Pharmacy, Tailoring, Restaurant); Feature flags; Sidebar filtering; Settings expanded with Business/Vertical/Features/Tax tabs; Tax-aware HTML receipts",
+  "download_url": "https://gofile.io/d/IsJkkd",
+  "changelog": "v2.9.0 - First-run setup wizard (Business Type + Country + Tax); Tax engine (India GST with CGST/SGST/IGST, Nepal VAT, or None); Industry verticals (General, Kirana, Pharmacy, Tailoring, Restaurant); Feature flags; Sidebar filtering; Settings expanded with Business/Vertical/Features/Tax tabs; Tax-aware HTML receipts. Download: https://gofile.io/d/IsJkkd",
   "release_date": "2026-07-29",
   "file_size_mb": 41.7,
-  "sha256_hash": "73e4f63b11a654bf31432830f94818b5d658a547f4f9500454488a3c22bac8f0"
+  "sha256_hash": "f007df1b735679d40c93c66abb9097bb"
 }
