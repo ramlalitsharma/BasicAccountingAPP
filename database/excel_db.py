@@ -239,6 +239,14 @@ def _dicts_to_sheet(ws, dicts, headers):
         ws.append([_sanitize(d.get(h, "")) for h in headers])
 
 
+def _audit(action, entity, record_id, details=""):
+    try:
+        from database.audit import log
+        log(action, entity, record_id, details)
+    except Exception:
+        pass
+
+
 def _now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -266,6 +274,8 @@ def add_supplier(name, contact="", address=""):
         sid = _next_id(ws)
         ws.append([sid, name, contact, address, _now()])
         _save_and_close(wb)
+        _audit("CREATE", "Supplier", sid)
+
         return sid
     except Exception:
         _close_wb(wb)
@@ -349,6 +359,8 @@ def add_stock_item(item_name, category, quantity, purchase_price, selling_price,
                    purchase_price, selling_price, supplier_id, _now()])
         _log_stock_change_internal(wb, sid, "add", quantity, 0, f"Added {quantity} units")
         _save_and_close(wb)
+        _audit("CREATE", "Stock", sid)
+
         return sid
     except Exception:
         _close_wb(wb)
@@ -529,6 +541,7 @@ def record_sale(stock_id, quantity_sold, price, customer_id=None,
         _log_stock_change_internal(wb, stock_id, "sale", -quantity_sold,
                                     old_qty, f"Sold {quantity_sold} units")
         _save_and_close(wb)
+        _audit("CREATE", "Sale", sid)
         return sid, receipt_no
     except Exception:
         _close_wb(wb)
@@ -970,6 +983,12 @@ def add_extra_income(source, description, amount, category, payment_method, refe
         sid = _next_id(ws)
         ws.append([sid, source, description, amount, category, payment_method, reference_no, _now()])
         _save_and_close(wb)
+        _audit("CREATE", "Customer", sid)
+
+        _audit("CREATE", "Purchase", sid)
+
+        _audit("CREATE", "ExtraIncome", sid)
+
         return sid
     except Exception:
         _close_wb(wb)
@@ -1069,6 +1088,7 @@ def add_preorder(customer_id, stock_id, quantity, preorder_price, delivery_date,
                    _now(), "", "",
                    delivery_address, advance_amount, advance_type, advance_paid_at])
         _save_and_close(wb)
+        _audit("CREATE", "Preorder", oid)
         return oid
     except Exception:
         _close_wb(wb)
@@ -1250,6 +1270,7 @@ def complete_preorder(preorder_id):
         _dicts_to_sheet(ws, data, SHEETS["Preorders"])
 
         _save_and_close(wb)
+        _audit("CREATE", "Sale", sid)
         return sid, receipt_no
     except Exception:
         _close_wb(wb)

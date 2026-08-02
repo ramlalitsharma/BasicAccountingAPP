@@ -1,0 +1,9 @@
+{
+  "valid_keys": [
+    "PRO-ACCPRO-2027-ENTERPRISE-UNLIMITED",
+    "PRO-ACCPRO-2027-PRO-ACCESS1",
+    "PRO-ACCPRO-2027-PRO-ACCESS2"
+  ],
+  "version": "1.0",
+  "note": "This file validates activated license keys. Keys can be purchased at https://github.com/ramlalitsharma/BasicAccountingAPP"
+}

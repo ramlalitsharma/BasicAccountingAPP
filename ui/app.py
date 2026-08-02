@@ -116,7 +116,16 @@ class AccountingApp(tk.Tk):
         start_auto_backup(backup_interval)
         self.after(300, self._initial_file_setup)
         self.after(400, self._maybe_run_first_run_wizard)
+        self.after(600, self._maybe_run_login)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _maybe_run_login(self):
+        try:
+            from ui.login_dialog import LoginDialog
+            if not LoginDialog(self).show():
+                self._on_close()
+        except Exception as exc:
+            print(f"Login dialog failed (non-fatal): {exc}")
 
     def _maybe_run_first_run_wizard(self):
         try:

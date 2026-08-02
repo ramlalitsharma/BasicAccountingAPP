@@ -32,6 +32,8 @@ class SettingsPage(ttk.Frame):
         self._vertical_tab(self._notebook)
         self._features_tab(self._notebook)
         self._tax_tab(self._notebook)
+        self._users_tab(self._notebook)
+        self._audit_log_tab(self._notebook)
         self._company_tab(self._notebook)
         self._backup_tab(self._notebook)
         self._license_tab(self._notebook)
@@ -540,3 +542,110 @@ class SettingsPage(ttk.Frame):
         set_setting("first_run", False)
         self._app.reload_current_page()
         messagebox.showinfo("Saved", "Tax settings saved")
+
+    # ========== USERS TAB ==========
+    def _users_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Users  ")
+
+        from utils.auth import auth_manager, ROLES
+        tk.Label(frame, text="User Management", font=(FONT_FAMILY, 12, "bold"),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w")
+        tk.Label(frame, text="Manage who can access this system.",
+                 font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(anchor="w", pady=(0, 10))
+
+        info_frame = tk.Frame(frame, bg=CARD_BG)
+        info_frame.pack(fill=tk.X, pady=(0, 10))
+        current_user = auth_manager.get_current_user() or "Not logged in"
+        current_role = auth_manager.get_current_role() or "viewer"
+        tk.Label(info_frame, text=f"Current User: {current_user}  |  Role: {current_role.capitalize()}",
+                 font=(FONT_FAMILY, 10), bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w")
+
+        # User list
+        list_frame = tk.Frame(frame, bg=CARD_BG)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=4)
+
+        tree = ttk.Treeview(list_frame, columns=["user", "role", "name", "created"],
+                           show="headings", height=6)
+        tree.heading("user", text="Username")
+        tree.heading("role", text="Role")
+        tree.heading("name", text="Display Name")
+        tree.heading("created", text="Created At")
+        tree.column("user", width=100)
+        tree.column("role", width=80)
+        tree.column("name", width=120)
+        tree.column("created", width=140)
+        for u in auth_manager.list_users():
+            tree.insert("", tk.END, values=[u["username"],
+                u["role"].capitalize(), u["display_name"], u.get("created_at", "")])
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.configure(yscrollcommand=scroll.set)
+
+        btn_frame = tk.Frame(frame, bg=CARD_BG)
+        btn_frame.pack(fill=tk.X, pady=8)
+
+        def open_user_management():
+            from ui.login_dialog import UserManagementDialog
+            UserManagementDialog(self._app).show()
+            # Reload the tab
+            for i in range(self._notebook.index("end")):
+                if self._notebook.tab(i, "text") == "  Users  ":
+                    self._notebook.forget(i)
+                    break
+            self._users_tab(self._notebook)
+
+        ttk.Button(btn_frame, text="Manage Users (Add / Delete / Change Password)",
+                  command=open_user_management).pack(side=tk.LEFT, padx=2)
+
+    # ========== AUDIT LOG TAB ==========
+    def _audit_log_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=20)
+        notebook.add(frame, text="  Audit Log  ")
+
+        tk.Label(frame, text="Audit Trail", font=(FONT_FAMILY, 12, "bold"),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w")
+        tk.Label(frame, text="All CREATE / UPDATE / DELETE actions are logged with user and timestamp.",
+                 font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(anchor="w", pady=(0, 10))
+
+        list_frame = tk.Frame(frame, bg=CARD_BG)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        tree = ttk.Treeview(list_frame, columns=["time", "user", "action", "entity", "id"],
+                           show="headings", height=12)
+        tree.heading("time", text="Timestamp")
+        tree.heading("user", text="User")
+        tree.heading("action", text="Action")
+        tree.heading("entity", text="Entity")
+        tree.heading("id", text="Record ID")
+        tree.column("time", width=150)
+        tree.column("user", width=80)
+        tree.column("action", width=70)
+        tree.column("entity", width=80)
+        tree.column("id", width=60)
+
+        def load_audit():
+            for item in tree.get_children():
+                tree.delete(item)
+            try:
+                from database import excel_db as db
+                if db._active_file:
+                    from openpyxl import load_workbook
+                    wb = load_workbook(db._active_file)
+                    if "AuditLog" in wb.sheetnames:
+                        ws = wb["AuditLog"]
+                        for row in ws.iter_rows(min_row=2, values_only=True):
+                            if any(v for v in row):
+                                tree.insert("", 0, values=list(row)[:5])
+                    wb.close()
+            except Exception:
+                pass
+
+        load_audit()
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.configure(yscrollcommand=scroll.set)
+
+        ttk.Button(frame, text="Refresh", command=load_audit).pack(anchor="w", pady=6)
