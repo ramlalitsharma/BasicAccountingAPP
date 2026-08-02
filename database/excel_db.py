@@ -195,13 +195,17 @@ def _save_and_close(wb):
     if _active_file is None:
         wb.close()
         return
-    tmp = _active_file + ".tmp"
+    import uuid
+    tmp = _active_file + "." + uuid.uuid4().hex + ".tmp"
     try:
         wb.save(tmp)
-        shutil.move(tmp, _active_file)
+        os.replace(tmp, _active_file)
     except Exception:
         if os.path.exists(tmp):
-            os.remove(tmp)
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
         raise
     finally:
         wb.close()

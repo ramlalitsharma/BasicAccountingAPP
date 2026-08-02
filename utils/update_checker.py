@@ -296,9 +296,29 @@ def download_update_async(download_url, callback=None):
                             state["download_progress"] = progress
                             _save(state)
 
-            mark_update_downloaded(temp_path)
-            if callback:
-                callback({"success": True, "path": temp_path})
+            # Verify downloaded file is not HTML (e.g., from gofile JS page)
+            _is_valid = False
+            try:
+                with open(temp_path, "rb") as vf:
+                    magic = vf.read(4)
+                    # PE executable: MZ (4D 5A)
+                    # MSI: usually starts with MZ or D0 CF
+                    if magic[:2] == b'MZ':
+                        _is_valid = True
+            except OSError:
+                pass
+            if _is_valid:
+                mark_update_downloaded(temp_path)
+                if callback:
+                    callback({"success": True, "path": temp_path})
+            else:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+                logger.error("Downloaded file is not a valid PE executable")
+                if callback:
+                    callback({"success": False, "error": "Downloaded file is not a valid executable"})
         except (FileNotFoundError, OSError) as e:
             logger.exception("Download failed")
             if callback:
@@ -328,20 +348,24 @@ def verify_download(filepath, expected_hash):
 
 def install_update(filepath):
     logger.info(f"Launching update installer: {filepath}")
+    if not os.path.isfile(filepath):
+        logger.error(f"Update file not found: {filepath}")
+        return
     try:
         old_exe = sys.executable if getattr(sys, "frozen", False) else None
         if old_exe:
             bat_path = os.path.join(CONFIG_DIR, "_update_launcher.bat")
+            sanitized = os.path.normpath(filepath)
             with open(bat_path, "w") as bat:
                 bat.write('@echo off\n')
                 bat.write('echo Updating Accounting Pro...\n')
                 bat.write('timeout /t 3 /nobreak >nul\n')
-                bat.write(f'taskkill /f /im "{os.path.basename(old_exe)}" 2>nul\n')
+                bat.write('taskkill /f /im "' + os.path.basename(old_exe) + '" 2>nul\n')
                 bat.write('timeout /t 2 /nobreak >nul\n')
-                bat.write(f'start "" "{filepath}"\n')
-                bat.write(f'del "%~f0"\n')
+                bat.write('start "" "' + sanitized + '"\n')
+                bat.write('del "%~f0"\n')
             subprocess.Popen(
-                f'cmd /c "{bat_path}"',
+                ['cmd', '/c', bat_path],
                 creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                 close_fds=True,
             )

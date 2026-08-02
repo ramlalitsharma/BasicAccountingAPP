@@ -893,7 +893,20 @@ class AccountingApp(tk.Tk):
                     filepath = result["path"]
                     expected_hash = status.get("sha256_hash", "")
                     if expected_hash and not verify_download(filepath, expected_hash):
-                        downloaded_hash = get_file_hash(filepath) if 'get_file_hash' in dir() else ""
+                        try:
+                            with open(filepath, "rb") as vf:
+                                is_pe = vf.read(2) == b'MZ'
+                        except OSError:
+                            is_pe = False
+                        if not is_pe:
+                            status_lbl.config(text="Downloaded page is not an executable. Opening browser...")
+                            try:
+                                os.remove(filepath)
+                            except OSError:
+                                pass
+                            self.close_modal()
+                            self._open_update_url(url)
+                            return
                         status_lbl.config(text="Verification failed. Offering options...")
                         try:
                             os.remove(filepath)

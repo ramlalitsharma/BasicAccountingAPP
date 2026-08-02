@@ -2,8 +2,8 @@
   "latest_version": "2.9.0",
   "min_version": "2.8.0",
   "force_update": false,
-  "download_url": "https://gofile.io/d/01yb5H",
-  "changelog": "v2.9.0 - First-run setup wizard (Business Type + Country + Tax); Tax engine (India GST with CGST/SGST/IGST, Nepal VAT, or None); Industry verticals (General, Kirana, Pharmacy, Tailoring, Restaurant); Feature flags; Sidebar filtering; Settings expanded with Business/Vertical/Features/Tax tabs; Tax-aware HTML receipts. Download: https://gofile.io/d/IsJkkd",
+  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases",
+  "changelog": "v2.9.0 - First-run setup wizard; Tax engine (India GST CGST/SGST/IGST, Nepal VAT); Industry verticals (General/Kirana/Pharmacy/Tailoring/Restaurant); Feature flags with sidebar filtering; Expanded Settings; Tax-aware receipts; All security fixes applied. Download from GitHub: https://github.com/ramlalitsharma/BasicAccountingAPP/releases",
   "release_date": "2026-08-02",
   "file_size_mb": 41.8,
   "sha256_hash": "e6f1150b4194f7b906e7df606c25c1d997cc6233eca5c03d4aaf5691b1d10001"
