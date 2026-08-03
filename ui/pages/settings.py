@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import logging
 from config import (
     ACCENT_COLOR, ACCENT_LIGHT, FONT_FAMILY, APP_NAME, VERSION,
     USER_DATA_DIR, update_data_dir, TEXT_PRIMARY, TEXT_MUTED,
@@ -11,6 +12,9 @@ from utils.update_checker import get_update_status
 from config import RELEASE_BASE_URL
 from database.backup import start_auto_backup, stop_auto_backup
 from utils.license import license_manager, TIERS
+
+
+_log = logging.getLogger(__name__)
 
 
 class SettingsPage(ttk.Frame):
@@ -27,17 +31,35 @@ class SettingsPage(ttk.Frame):
         self._notebook = ttk.Notebook(self)
         self._notebook.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 20))
 
-        self._general_tab(self._notebook)
-        self._business_tab(self._notebook)
-        self._vertical_tab(self._notebook)
-        self._features_tab(self._notebook)
-        self._tax_tab(self._notebook)
-        self._users_tab(self._notebook)
-        self._audit_log_tab(self._notebook)
-        self._company_tab(self._notebook)
-        self._backup_tab(self._notebook)
-        self._license_tab(self._notebook)
-        self._updates_tab(self._notebook)
+        tabs = [
+            ("  General  ", self._general_tab),
+            ("  Business  ", self._business_tab),
+            ("  Vertical  ", self._vertical_tab),
+            ("  Features  ", self._features_tab),
+            ("  Tax  ", self._tax_tab),
+            ("  Users  ", self._users_tab),
+            ("  Audit Log  ", self._audit_log_tab),
+            ("  Company  ", self._company_tab),
+            ("  Backup  ", self._backup_tab),
+            ("  License  ", self._license_tab),
+            ("  Updates  ", self._updates_tab),
+        ]
+        for label, builder in tabs:
+            try:
+                builder(self._notebook)
+            except Exception as exc:
+                _log.exception("Failed to build settings tab %s", label)
+                self._add_error_tab(label.strip(), exc)
+
+    def _add_error_tab(self, label, exc):
+        frame = ttk.Frame(self._notebook, padding=20)
+        self._notebook.add(frame, text=label)
+        tk.Label(frame, text=f"⚠  This tab failed to load.",
+                 font=(FONT_FAMILY, 12, "bold"),
+                 bg=CARD_BG, fg="#DC2626").pack(anchor="w")
+        tk.Label(frame, text=str(exc),
+                 font=(FONT_FAMILY, 9), bg=CARD_BG,
+                 fg=TEXT_MUTED, wraplength=600, justify="left").pack(anchor="w", pady=(4, 0))
 
     def _general_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
@@ -576,8 +598,12 @@ class SettingsPage(ttk.Frame):
         tree.column("name", width=120)
         tree.column("created", width=140)
         for u in auth_manager.list_users():
-            tree.insert("", tk.END, values=[u["username"],
-                u["role"].capitalize(), u["display_name"], u.get("created_at", "")])
+            tree.insert("", tk.END, values=[
+                u.get("username", "") or "",
+                (u.get("role", "") or "viewer").capitalize(),
+                u.get("display_name", "") or "",
+                u.get("created_at", "") or "",
+            ])
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)

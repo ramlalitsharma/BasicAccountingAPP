@@ -11,6 +11,8 @@ from config import (
     DANGER_COLOR,
 )
 from utils.formatters import format_currency, safe_float
+from utils.settings_helper import get_current_vertical, is_feature_enabled
+from utils.verticals import VERTICALS, ALL_FEATURES
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
@@ -125,6 +127,9 @@ class DashboardPage(ttk.Frame):
         tk.Label(d, text="Business overview at a glance",
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_MUTED).pack(anchor="w", padx=PADDING_LG)
         tk.Frame(d, bg=BG_COLOR, height=6).pack()
+
+        self._vertical_card = self._build_vertical_card(d)
+        self._vertical_card.pack(fill=tk.X, padx=PADDING_LG, pady=(0, 10))
 
         canvas = tk.Canvas(d, bg=BG_COLOR, highlightthickness=0)
         scrollbar = ttk.Scrollbar(d, orient="vertical", command=canvas.yview)
@@ -245,6 +250,79 @@ class DashboardPage(ttk.Frame):
 
         self.refresh()
 
+    def _build_vertical_card(self, parent):
+        card = tk.Frame(parent, bg=CARD_BG, highlightbackground=CARD_BORDER,
+                        highlightthickness=1, padx=18, pady=14)
+
+        top = tk.Frame(card, bg=CARD_BG)
+        top.pack(fill=tk.X)
+
+        self._v_icon_lbl = tk.Label(top, text="", font=("Segoe UI Emoji", 22),
+                                    bg=CARD_BG, fg=TEXT_PRIMARY)
+        self._v_icon_lbl.pack(side=tk.LEFT, padx=(0, 10))
+
+        title_box = tk.Frame(top, bg=CARD_BG)
+        title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self._v_title_lbl = tk.Label(title_box, text="Business Type",
+                                     font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
+                                     bg=CARD_BG, fg=TEXT_PRIMARY)
+        self._v_title_lbl.pack(anchor="w")
+        self._v_desc_lbl = tk.Label(title_box, text="",
+                                    font=(FONT_FAMILY, FONT_SIZE_SM),
+                                    bg=CARD_BG, fg=TEXT_SECONDARY,
+                                    wraplength=520, justify="left")
+        self._v_desc_lbl.pack(anchor="w")
+
+        tk.Button(top, text="Change…", font=(FONT_FAMILY, 9),
+                  bg=ACCENT_COLOR, fg="white", bd=0, padx=10, pady=4,
+                  cursor="hand2",
+                  command=self._open_vertical_settings).pack(side=tk.RIGHT)
+
+        self._v_features_lbl = tk.Label(card, text="",
+                                        font=(FONT_FAMILY, FONT_SIZE_SM),
+                                        bg=CARD_BG, fg=TEXT_MUTED,
+                                        wraplength=700, justify="left")
+        self._v_features_lbl.pack(anchor="w", pady=(8, 0))
+        return card
+
+    def _refresh_vertical_card(self):
+        try:
+            v_key = get_current_vertical()
+            v = VERTICALS.get(v_key, VERTICALS["general"])
+        except Exception:
+            v_key, v = "general", VERTICALS["general"]
+        feat_names = {fid: name for fid, name, _ in ALL_FEATURES}
+        primary = v.get("primary_features", [])
+        enabled = [feat_names[f] for f in primary if is_feature_enabled(f)]
+        extra = v.get("extra_stock_fields", []) + v.get("extra_customer_fields", [])
+        try:
+            self._v_icon_lbl.config(text=v.get("icon", ""))
+            self._v_title_lbl.config(text=f"{v.get('name', v_key)}  ·  active")
+            self._v_desc_lbl.config(text=v.get("description", ""))
+            if enabled:
+                feats_txt = "Active features: " + ", ".join(enabled)
+            else:
+                feats_txt = "No primary features enabled — open Settings → Features."
+            if extra:
+                feats_txt += f"\nExtra fields: {', '.join(extra)}"
+            self._v_features_lbl.config(text=feats_txt)
+        except tk.TclError:
+            pass
+
+    def _open_vertical_settings(self):
+        try:
+            app = self.winfo_toplevel()
+            app._navigate("settings")
+            # try to focus the Vertical tab
+            page = app._pages.get("settings")
+            if page and hasattr(page, "_notebook"):
+                for i in range(page._notebook.index("end")):
+                    if page._notebook.tab(i, "text").strip() == "Vertical":
+                        page._notebook.select(i)
+                        break
+        except tk.TclError:
+            pass
+
     def _safe_get_sales(self):
         try:
             return models.get_sales()
@@ -339,6 +417,11 @@ class DashboardPage(ttk.Frame):
             return
         self._welcome_frame.pack_forget()
         self._dashboard_frame.pack(fill=tk.BOTH, expand=True)
+
+        try:
+            self._refresh_vertical_card()
+        except Exception:
+            pass
 
         try:
             stats = models.get_dashboard_stats()

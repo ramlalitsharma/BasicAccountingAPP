@@ -97,10 +97,41 @@ VERTICALS: Dict[str, Dict] = {
             "supplier_returns": True,
             "whatsapp_invoice": True,
             "payment_gateway": False,
+            "table_orders": True,
+            "kot": True,
+            "combo_items": False,
+            "quick_billing": True,
+            "recipe_tracking": False,
         },
-        "extra_stock_fields": [],
+        "extra_stock_fields": ["prep_time"],
         "extra_customer_fields": ["table_no"],
-        "primary_features": ["whatsapp_invoice"],
+        "primary_features": ["whatsapp_invoice", "table_orders", "kot", "quick_billing"],
+    },
+    "coffee_shop": {
+        "name": "Coffee Shop / Cafe",
+        "description": "Coffee shop billing with table orders, KOT, combos (e.g. coffee+cookie), recipe/ingredient tracking, and quick checkout.",
+        "icon": "☕",
+        "default_features": {
+            "tax_system": True,
+            "barcode_scanner": False,
+            "weight_pricing": False,
+            "batch_tracking": False,
+            "expiry_tracking": True,
+            "schedule_tracking": False,
+            "measurements": False,
+            "supplier_returns": True,
+            "whatsapp_invoice": True,
+            "payment_gateway": False,
+            "table_orders": True,
+            "kot": True,
+            "combo_items": True,
+            "quick_billing": True,
+            "recipe_tracking": True,
+        },
+        "extra_stock_fields": ["recipe_ingredients", "prep_time", "sizes"],
+        "extra_customer_fields": ["table_no"],
+        "primary_features": ["whatsapp_invoice", "table_orders", "kot", "combo_items",
+                             "quick_billing", "recipe_tracking", "expiry_tracking"],
     },
 }
 
@@ -117,6 +148,11 @@ ALL_FEATURES = [
     ("payment_gateway", "Payment Gateway", "Online payment links via Razorpay/Stripe/etc."),
     ("audit_trail", "Audit Trail", "Detailed edit log per record: who/when changed what"),
     ("bank_recon", "Bank Reconciliation", "Match bank transactions with sales/purchase records"),
+    ("table_orders", "Table Orders", "Assign and manage orders by table number"),
+    ("kot", "Kitchen Order Ticket (KOT)", "Print/send separate KOTs to the kitchen for each order"),
+    ("combo_items", "Combo / Meal Deals", "Bundle items as combos (e.g. coffee + cookie) with combo-level pricing"),
+    ("quick_billing", "Quick Billing Mode", "Compact fast-checkout UI suited for cafes and counters"),
+    ("recipe_tracking", "Recipe / Ingredient Tracking", "Track recipe ingredients and auto-deduct stock per item sold"),
 ]
 
 COUNTRIES = ["India", "Nepal", "None"]
@@ -127,6 +163,7 @@ DEFAULT_COUNTRY_FOR_VERTICAL = {
     "pharmacy": "India",
     "tailoring": "India",
     "restaurant": "India",
+    "coffee_shop": "India",
 }
 
 

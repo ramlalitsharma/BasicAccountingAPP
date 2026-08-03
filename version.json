@@ -1,10 +1,10 @@
 {
-  "latest_version": "2.9.0",
+  "latest_version": "2.9.1",
   "min_version": "2.8.0",
   "force_update": false,
   "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases",
-  "changelog": "v2.9.0 - First-run setup wizard; Tax engine (India GST CGST/SGST/IGST, Nepal VAT); Industry verticals (General/Kirana/Pharmacy/Tailoring/Restaurant); Feature flags with sidebar filtering; Expanded Settings; Tax-aware receipts; All security fixes applied. Download from GitHub: https://github.com/ramlalitsharma/BasicAccountingAPP/releases",
-  "release_date": "2026-08-02",
-  "file_size_mb": 41.8,
-  "sha256_hash": "5c2976b76280f9d8147db338d864394c0eb4b13a46344eb94a4f87bb734698a7"
+  "changelog": "v2.9.1 - Fixed Settings page blank crash (auth None-role guard + per-tab error isolation); added Coffee Shop vertical with table orders, KOT, combos, quick billing, and recipe tracking; fixed dotted/nested settings-key inconsistency so feature flags actually persist; added Active Vertical card on Dashboard; added Table/KOT panel on Sales for restaurant/coffee shop; rebuilt installer.",
+  "release_date": "2026-08-03",
+  "file_size_mb": 41.9,
+  "sha256_hash": "c808c07d9bc7c10a5821ae0f739441b59307780ee67b67d23764cd2a91a0a149"
 }

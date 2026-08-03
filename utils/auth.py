@@ -135,15 +135,20 @@ class AuthManager:
 
     def list_users(self):
         if not self.has_permission("can_manage_users"):
-            return [{"username": self._current_user, "role": self._current_role,
-                     "display_name": self._users.get(self._current_user, {}).get("display_name", "")}]
+            return [{"username": self._current_user or "—",
+                     "role": self._current_role or "viewer",
+                     "display_name": (self._users.get(self._current_user, {}) or {}).get("display_name", ""),
+                     "created_at": (self._users.get(self._current_user, {}) or {}).get("created_at", "")}]
         result = []
         for uname, info in self._users.items():
+            role = info.get("role") or "cashier"
+            if role not in ROLES:
+                role = "cashier"
             result.append({
                 "username": uname,
-                "role": info.get("role"),
-                "display_name": info.get("display_name"),
-                "created_at": info.get("created_at"),
+                "role": role,
+                "display_name": info.get("display_name") or uname,
+                "created_at": info.get("created_at") or "",
             })
         return sorted(result, key=lambda x: ROLES.get(x["role"], {}).get("priority", 99))
 

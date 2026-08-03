@@ -3,7 +3,7 @@ import sys
 import json
 from pathlib import Path
 
-VERSION = "2.9.0"
+VERSION = "2.9.1"
 APP_NAME = "Accounting Pro"
 APP_GEOMETRY = "1280x780"
 APP_MIN_SIZE = "960x640"
@@ -73,12 +73,42 @@ def update_data_dir(new_path):
     os.makedirs(LOG_DIR, exist_ok=True)
 
 
+def _split_key(key):
+    if "." in key:
+        head, _, tail = key.partition(".")
+        return head, tail
+    return key, None
+
+
+def _get_nested(data, key):
+    head, tail = _split_key(key)
+    if tail is None:
+        return data.get(head)
+    sub = data.get(head)
+    if not isinstance(sub, dict):
+        return None
+    return _get_nested(sub, tail)
+
+
+def _set_nested(data, key, value):
+    head, tail = _split_key(key)
+    if tail is None:
+        data[head] = value
+        return
+    if head not in data or not isinstance(data[head], dict):
+        data[head] = {}
+    _set_nested(data[head], tail, value)
+
+
 def get_setting(key, default=None):
-    return _settings.get(key, default)
+    val = _get_nested(_settings, key)
+    if val is not None:
+        return val
+    return default
 
 
 def set_setting(key, value):
-    _settings[key] = value
+    _set_nested(_settings, key, value)
     _save_settings(_settings)
 
 

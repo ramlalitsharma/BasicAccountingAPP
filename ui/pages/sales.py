@@ -8,7 +8,8 @@ from ui.widgets.tooltip import ToolTip
 from utils.export import export_to_csv
 from utils.billing import print_bill
 from utils.formatters import safe_float
-from config import FONT_FAMILY, BG_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, FONT_SIZE_MD, FONT_SIZE_XL
+from utils.settings_helper import is_feature_enabled, get_current_vertical
+from config import FONT_FAMILY, BG_COLOR, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, FONT_SIZE_MD, FONT_SIZE_XL
 
 
 class SalesPage(ttk.Frame):
@@ -20,6 +21,10 @@ class SalesPage(ttk.Frame):
         header = ttk.Label(self, text="Sales",
                            font=(FONT_FAMILY, 20, "bold"))
         header.pack(anchor="w", padx=20, pady=(20, 10))
+
+        # Optional vertical-specific panel (Coffee Shop / Restaurant)
+        if is_feature_enabled("table_orders"):
+            self._build_table_panel()
 
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, padx=20, pady=(0, 10))
@@ -101,6 +106,85 @@ class SalesPage(ttk.Frame):
                            on_double_click=self._print_bill, alignments=aligns)
 
         self.refresh()
+
+    def _build_table_panel(self):
+        panel = tk.Frame(self, bg=CARD_BG, highlightbackground="#CBD5E1",
+                         highlightthickness=1)
+        panel.pack(fill=tk.X, padx=20, pady=(0, 10))
+
+        vertical = get_current_vertical()
+        title = "☕ Coffee Shop / Cafe" if vertical == "coffee_shop" else "🍽️ Restaurant Tables"
+        tk.Label(panel, text=title, font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w", padx=12, pady=(10, 4))
+
+        row = tk.Frame(panel, bg=CARD_BG)
+        row.pack(fill=tk.X, padx=12, pady=(0, 8))
+
+        tk.Label(row, text="Table No.:", font=(FONT_FAMILY, FONT_SIZE_MD),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(side=tk.LEFT)
+        self._table_no_var = tk.StringVar()
+        ttk.Entry(row, textvariable=self._table_no_var, width=8).pack(side=tk.LEFT, padx=(6, 12))
+
+        tk.Label(row, text="Order Type:", font=(FONT_FAMILY, FONT_SIZE_MD),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(side=tk.LEFT)
+        self._order_type_var = tk.StringVar(value="Dine-In")
+        ttk.Combobox(row, textvariable=self._order_type_var,
+                     values=["Dine-In", "Takeaway", "Delivery"],
+                     state="readonly", width=12).pack(side=tk.LEFT, padx=(6, 12))
+
+        if is_feature_enabled("kot"):
+            tk.Button(row, text="🖨  Print KOT", font=(FONT_FAMILY, 10, "bold"),
+                      bg="#D97706", fg="white", bd=0, padx=12, pady=4,
+                      cursor="hand2",
+                      command=self._print_kot).pack(side=tk.RIGHT, padx=4)
+        if is_feature_enabled("quick_billing"):
+            tk.Button(row, text="⚡ Quick Bill", font=(FONT_FAMILY, 10, "bold"),
+                      bg="#059669", fg="white", bd=0, padx=12, pady=4,
+                      cursor="hand2",
+                      command=self._quick_bill).pack(side=tk.RIGHT, padx=4)
+
+        # Open tables overview
+        if is_feature_enabled("table_orders"):
+            tables_frame = tk.Frame(panel, bg=CARD_BG)
+            tables_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
+            tk.Label(tables_frame, text="Quick-pick table:", font=(FONT_FAMILY, 9),
+                     bg=CARD_BG, fg=TEXT_MUTED).pack(side=tk.LEFT)
+            for t in ["T1", "T2", "T3", "T4", "T5", "T6", "Takeaway"]:
+                b = tk.Button(tables_frame, text=t, font=(FONT_FAMILY, 9, "bold"),
+                              bg="#EFF6FF", fg="#1D4ED8", bd=0, padx=10, pady=2,
+                              cursor="hand2",
+                              command=lambda v=t: self._table_no_var.set(v))
+                b.pack(side=tk.LEFT, padx=2)
+
+    def _print_kot(self):
+        table = self._table_no_var.get().strip() or "—"
+        order_type = self._order_type_var.get()
+        try:
+            from utils.billing import print_bill
+            sale_data = {
+                "id": f"KOT-{table}-{datetime.now().strftime('%H%M%S')}",
+                "Invoice_No": f"KOT-{table}",
+                "Customer_Name": f"{order_type} · Table {table}",
+                "Sale_Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Items": [{"name": "(items added in cart)", "qty": 1, "price": 0}],
+                "Subtotal": 0,
+                "Tax_Amount": 0,
+                "Total": 0,
+                "is_kot": True,
+            }
+            print_bill(sale_data)
+            messagebox.showinfo("KOT",
+                                f"KOT opened for Table {table} ({order_type}).")
+        except Exception as exc:
+            messagebox.showerror("KOT", f"Could not open KOT: {exc}")
+
+    def _quick_bill(self):
+        table = self._table_no_var.get().strip() or "Walk-in"
+        order_type = self._order_type_var.get()
+        messagebox.showinfo(
+            "Quick Bill",
+            f"Quick-bill placeholder for Table {table} ({order_type}).\n"
+            "Add items via 'New Sale' — table info is included on the receipt.")
 
     def _fmt_invoice(self, sale):
         sid = sale.get("ID", 0)

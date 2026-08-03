@@ -37,7 +37,7 @@ def show_splash():
         tk.Label(splash, text="Professional Accounting Suite",
                  font=("Segoe UI", 11),
                  bg="#1a1a2e", fg="#c8d6e5").place(relx=0.5, rely=0.68, anchor="center")
-        tk.Label(splash, text="v2.8.0  |  Loading...",
+        tk.Label(splash, text="v2.9.1  |  Loading...",
                  font=("Segoe UI", 8),
                  bg="#1a1a2e", fg="#0f3460").place(relx=0.5, rely=0.82, anchor="center")
 
@@ -51,7 +51,7 @@ def show_splash():
 def main():
     from utils.logging_setup import setup_logging
     logger = setup_logging()
-    logger.info("Starting Accounting Pro v2.8.0")
+    logger.info("Starting Accounting Pro v2.9.1")
 
     def global_exception_handler(exc_type, exc_value, exc_traceback):
         logger.critical("Unhandled global exception", exc_info=(exc_type, exc_value, exc_traceback))
