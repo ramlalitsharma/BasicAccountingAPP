@@ -6,5 +6,5 @@
   "changelog": "v2.9.0 - First-run setup wizard; Tax engine (India GST CGST/SGST/IGST, Nepal VAT); Industry verticals (General/Kirana/Pharmacy/Tailoring/Restaurant); Feature flags with sidebar filtering; Expanded Settings; Tax-aware receipts; All security fixes applied. Download from GitHub: https://github.com/ramlalitsharma/BasicAccountingAPP/releases",
   "release_date": "2026-08-02",
   "file_size_mb": 41.8,
-  "sha256_hash": "c59a457586019785aaa8768e2ac335685bcfd409c971a8730237a17d4239536d"
+  "sha256_hash": "715c63e16bd8f307b119e3cc2e6d0c7e07fbfeb912baa5a522d33161cbcd29a3"
 }
