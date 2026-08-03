@@ -89,6 +89,12 @@ def _render_html(sale_data):
     if cpan:
         gst_pan_html += f"PAN: {eh(cpan)}"
 
+    payment_rows = ""
+    if payment_status.lower() != "paid":
+        payment_rows = f"""
+        <tr><td>Paid</td><td class="amt">{format_currency(paid_amt)}</td</tr>
+        <tr><td>Balance</td><td class="amt">{format_currency(unpaid_amt)}</td</tr>"""
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>

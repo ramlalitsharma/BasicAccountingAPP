@@ -144,7 +144,7 @@ def get_default_feature_flags(vertical_key: str) -> Dict[str, bool]:
     if not v:
         return {k: True for k, _ in ALL_FEATURES}
     primary = set(v.get("primary_features", []))
-    defaults = {k: (k in primary) for k, _ in ALL_FEATURES}
+    defaults = {k: (k in primary) for k, _, _ in ALL_FEATURES}
     for k, val in v.get("default_features", {}).items():
         defaults[k] = val
     return defaults
