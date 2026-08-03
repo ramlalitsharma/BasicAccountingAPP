@@ -99,6 +99,7 @@ class AccountingApp(tk.Tk):
 
         self._pages = {}
         self._current_page = None
+        self._current_page_key = None
         self._nav_buttons = {}
         self.toast = Toast(self)
 
@@ -711,6 +712,7 @@ class AccountingApp(tk.Tk):
         page_class = page_map.get(page_key)
         if page_class:
             self._current_page = page_key
+            self._current_page_key = page_key
             page = page_class(self.content)
             page.pack(fill=tk.BOTH, expand=True)
             self._pages[page_key] = page

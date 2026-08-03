@@ -1,10 +1,10 @@
 {
-  "latest_version": "2.9.1",
+  "latest_version": "2.9.2",
   "min_version": "2.8.0",
   "force_update": false,
   "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases",
-  "changelog": "v2.9.1 - Fixed Settings page blank crash (auth None-role guard + per-tab error isolation); added Coffee Shop vertical with table orders, KOT, combos, quick billing, and recipe tracking; fixed dotted/nested settings-key inconsistency so feature flags actually persist; added Active Vertical card on Dashboard; added Table/KOT panel on Sales for restaurant/coffee shop; rebuilt installer.",
+  "changelog": "v2.9.2 - Move Vertical info card from Dashboard to Settings -> Vertical tab (Dashboard now scrolls cleanly with mouse wheel). Replace modal messagebox after Print KOT / Quick Bill with a non-blocking toast so the dialog cannot be mistaken for the main window close. Sales 'Print Bill' now asks for confirmation before opening the browser. Initialize _current_page_key to prevent reload crash after first-run wizard. Live-verified: all 10 pages and 11 settings tabs build without exceptions.",
   "release_date": "2026-08-03",
   "file_size_mb": 41.9,
-  "sha256_hash": "c808c07d9bc7c10a5821ae0f739441b59307780ee67b67d23764cd2a91a0a149"
+  "sha256_hash": "913df941446095682d7625c90ea73b45e4edb260dbf6061900e48a39d320ceb8"
 }

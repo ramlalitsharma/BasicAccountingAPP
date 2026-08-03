@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import logging
 from config import (
     ACCENT_COLOR, ACCENT_LIGHT, FONT_FAMILY, APP_NAME, VERSION,
-    USER_DATA_DIR, update_data_dir, TEXT_PRIMARY, TEXT_MUTED,
+    USER_DATA_DIR, update_data_dir, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
     FONT_SIZE_MD, FONT_SIZE_LG, FONT_SIZE_XL, FONT_SIZE_XXL,
     get_setting, set_setting, CARD_BG, SUCCESS_COLOR,
 )
@@ -469,6 +469,35 @@ class SettingsPage(ttk.Frame):
     def _vertical_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
         notebook.add(frame, text="  Vertical  ")
+
+        # Current vertical info card
+        from utils.verticals import VERTICALS, ALL_FEATURES
+        cur_key = get_setting("vertical", "general")
+        cur = VERTICALS.get(cur_key, VERTICALS["general"])
+        info = tk.Frame(frame, bg=CARD_BG, highlightbackground="#CBD5E1",
+                        highlightthickness=1, padx=14, pady=12)
+        info.pack(fill=tk.X, pady=(0, 14))
+        top = tk.Frame(info, bg=CARD_BG); top.pack(fill=tk.X)
+        tk.Label(top, text=cur.get("icon", ""), font=("Segoe UI Emoji", 20),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(top, text=f"{cur.get('name', cur_key)}  ·  active",
+                 font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
+                 bg=CARD_BG, fg=TEXT_PRIMARY).pack(side=tk.LEFT)
+        tk.Label(info, text=cur.get("description", ""),
+                 font=(FONT_FAMILY, 9), bg=CARD_BG, fg=TEXT_SECONDARY,
+                 wraplength=620, justify="left").pack(anchor="w", pady=(6, 4))
+        feat_names = {fid: name for fid, name, _ in ALL_FEATURES}
+        primary = [feat_names.get(f, f) for f in cur.get("primary_features", [])]
+        if primary:
+            tk.Label(info, text="Active features: " + ", ".join(primary),
+                     font=(FONT_FAMILY, 9), bg=CARD_BG, fg=TEXT_MUTED,
+                     wraplength=620, justify="left").pack(anchor="w")
+        extra = cur.get("extra_stock_fields", []) + cur.get("extra_customer_fields", [])
+        if extra:
+            tk.Label(info, text="Extra fields: " + ", ".join(extra),
+                     font=(FONT_FAMILY, 9), bg=CARD_BG, fg=TEXT_MUTED,
+                     wraplength=620, justify="left").pack(anchor="w")
+
         tk.Label(frame, text="Business Type", font=(FONT_FAMILY, 12, "bold"), bg=CARD_BG, fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 8))
         tk.Label(frame, text="Choose your industry. This enables appropriate features and fields.", font=(FONT_FAMILY, 9), fg=TEXT_MUTED, bg=CARD_BG).pack(anchor="w", pady=(0, 8))
         from utils.verticals import list_verticals

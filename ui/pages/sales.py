@@ -173,18 +173,28 @@ class SalesPage(ttk.Frame):
                 "is_kot": True,
             }
             print_bill(sale_data)
-            messagebox.showinfo("KOT",
-                                f"KOT opened for Table {table} ({order_type}).")
+            # Use a non-blocking toast instead of a modal messagebox so the user
+            # doesn't confuse the OK button with the main-window X.
+            try:
+                self._app.toast.show(f"KOT opened for Table {table}",
+                                     "success", 2500)
+            except Exception:
+                pass
         except Exception as exc:
-            messagebox.showerror("KOT", f"Could not open KOT: {exc}")
+            try:
+                self._app.toast.show(f"KOT failed: {exc}", "error", 4000)
+            except Exception:
+                pass
 
     def _quick_bill(self):
         table = self._table_no_var.get().strip() or "Walk-in"
         order_type = self._order_type_var.get()
-        messagebox.showinfo(
-            "Quick Bill",
-            f"Quick-bill placeholder for Table {table} ({order_type}).\n"
-            "Add items via 'New Sale' — table info is included on the receipt.")
+        try:
+            self._app.toast.show(
+                f"Quick-bill mode for Table {table} ({order_type}). "
+                f"Add items via 'New Sale'.", "info", 3000)
+        except Exception:
+            pass
 
     def _fmt_invoice(self, sale):
         sid = sale.get("ID", 0)
@@ -536,9 +546,14 @@ class SalesPage(ttk.Frame):
             messagebox.showwarning("No Selection", "Select a sale to print")
             return
         values = sel["values"]
+        inv = values[0] if values else f"#{sel['key']}"
+        if not messagebox.askyesno("Print Invoice",
+                                   f"Open invoice {inv} in your browser for printing?\n\n"
+                                   "(This launches the default browser.)"):
+            return
         sale_data = {
             "id": sel["key"],
-            "invoice_id": values[0] if values else f"#{sel['key']}",
+            "invoice_id": inv,
             "item_name": values[1] if len(values) > 1 else "",
             "category": values[2] if len(values) > 2 else "",
             "customer_name": values[3] if len(values) > 3 else "Walk-in Customer",
