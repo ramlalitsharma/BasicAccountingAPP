@@ -11,7 +11,7 @@ from utils.company import load_company, save_company
 from utils.update_checker import get_update_status
 from config import RELEASE_BASE_URL
 from database.backup import start_auto_backup, stop_auto_backup
-from utils.license import license_manager, TIERS
+from ui.pages.license_page import build_license_tab  # noqa: F401
 
 
 _log = logging.getLogger(__name__)
@@ -154,142 +154,7 @@ class SettingsPage(ttk.Frame):
         self._app.toast.show(f"Backup interval set to {interval} minutes", "success", 3000)
 
     def _license_tab(self, notebook):
-        frame = ttk.Frame(notebook, padding=20)
-        notebook.add(frame, text="  License  ")
-        self._license_frame = frame
-
-        row = 0
-        ttk.Label(frame, text="License",
-                  font=(FONT_FAMILY, 12, "bold")).grid(
-            row=row, column=0, columnspan=3, sticky="w", pady=(0, 10))
-        row += 1
-
-        ttk.Label(frame, text="Current Plan:",
-                  font=(FONT_FAMILY, 10, "bold")).grid(
-            row=row, column=0, sticky="w", pady=5, padx=(0, 10))
-
-        if license_manager.is_pro():
-            ttk.Label(frame, text=f"  {license_manager.get_tier_name()}  ",
-                      font=(FONT_FAMILY, 10, "bold"),
-                      foreground=SUCCESS_COLOR).grid(
-                row=row, column=1, sticky="w", pady=5)
-        else:
-            ttk.Label(frame, text=f"  {license_manager.get_tier_name()}  ",
-                      font=(FONT_FAMILY, 10, "bold"),
-                      foreground=TEXT_MUTED).grid(
-                row=row, column=1, sticky="w", pady=5)
-        row += 1
-
-        if license_manager.is_pro():
-            ttk.Label(frame, text="Licensed To:",
-                      font=(FONT_FAMILY, 10, "bold")).grid(
-                row=row, column=0, sticky="w", pady=5, padx=(0, 10))
-            ttk.Label(frame, text=license_manager.get_licensed_to(),
-                      font=(FONT_FAMILY, 10)).grid(
-                row=row, column=1, sticky="w", pady=5)
-            row += 1
-
-            ttk.Label(frame, text="Expires:",
-                      font=(FONT_FAMILY, 10, "bold")).grid(
-                row=row, column=0, sticky="w", pady=5, padx=(0, 10))
-            ttk.Label(frame, text=license_manager._license.get("expires", "N/A"),
-                      font=(FONT_FAMILY, 10)).grid(
-                row=row, column=1, sticky="w", pady=5)
-            row += 1
-
-            ttk.Label(frame, text=f"Stock Limit: {TIERS[license_manager.get_tier()]['max_stock_items']:,}",
-                      font=(FONT_FAMILY, 10)).grid(
-                row=row, column=0, columnspan=2, sticky="w", pady=2)
-            row += 1
-
-            features = []
-            if license_manager.has_feature("has_cloud_backup"):
-                features.append("Cloud Backup")
-            if license_manager.has_feature("has_email_invoicing"):
-                features.append("Email Invoicing")
-            if license_manager.has_feature("has_advanced_reports"):
-                features.append("Advanced Reports")
-            if license_manager.has_feature("has_multi_company"):
-                features.append("Multi-Company")
-            if features:
-                ttk.Label(frame, text="Features: " + ", ".join(features),
-                          font=(FONT_FAMILY, 9), foreground=TEXT_MUTED).grid(
-                    row=row, column=0, columnspan=3, sticky="w", pady=2)
-                row += 1
-
-            ttk.Separator(frame, orient="horizontal").grid(
-                row=row, column=0, columnspan=3, sticky="ew", pady=10)
-            row += 1
-
-            ttk.Button(frame, text="Deactivate License",
-                       command=self._deactivate_license).grid(
-                row=row, column=0, sticky="w", pady=5)
-        else:
-            ttk.Label(frame,
-                      text="Upgrade to Professional for unlimited items,\n"
-                           "cloud backup, email invoicing & more!",
-                      font=(FONT_FAMILY, 10),
-                      foreground=TEXT_MUTED).grid(
-                row=row, column=0, columnspan=3, sticky="w", pady=5)
-            row += 1
-            ttk.Button(frame, text="Upgrade to Pro",
-                       command=self._show_license_dialog).grid(
-                row=row, column=0, sticky="w", pady=15)
-
-    def _show_license_dialog(self):
-        body = self._app.show_modal("Activate Pro License", 450, 250)
-
-        tk.Label(body, text="Enter your license key to activate Professional:",
-                 font=(FONT_FAMILY, 10), bg=CARD_BG,
-                 fg=TEXT_PRIMARY).pack(anchor="w", pady=(0, 10))
-
-        tk.Label(body, text="License Key:",
-                 font=(FONT_FAMILY, 10, "bold"), bg=CARD_BG,
-                 fg=TEXT_PRIMARY).pack(anchor="w")
-        key_entry = ttk.Entry(body, width=40, font=(FONT_FAMILY, 10))
-        key_entry.pack(fill=tk.X, pady=(2, 10))
-        key_entry.insert(0, "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX")
-
-        tk.Label(body, text="Licensed To (Name):",
-                 font=(FONT_FAMILY, 10, "bold"), bg=CARD_BG,
-                 fg=TEXT_PRIMARY).pack(anchor="w")
-        name_entry = ttk.Entry(body, width=40, font=(FONT_FAMILY, 10))
-        name_entry.pack(fill=tk.X, pady=(2, 10))
-
-        def do_activate():
-            key = key_entry.get().strip()
-            name = name_entry.get().strip()
-            if not key or not name:
-                messagebox.showwarning("Missing Info",
-                                       "Please fill in both fields.")
-                return
-            success, msg = license_manager.activate(key, name)
-            if success:
-                self._app.close_modal()
-                messagebox.showinfo("Success", msg)
-                self._rebuild_license()
-            else:
-                messagebox.showerror("Activation Failed", msg)
-
-        btn_frame = tk.Frame(body, bg=CARD_BG)
-        btn_frame.pack(fill=tk.X, pady=(10, 0))
-        ttk.Button(btn_frame, text="Activate",
-                   command=do_activate).pack(side=tk.LEFT, padx=(0, 5))
-
-    def _deactivate_license(self):
-        if messagebox.askyesno("Deactivate License",
-                               "Are you sure? You will lose Pro features."):
-            license_manager.deactivate()
-            messagebox.showinfo("Deactivated",
-                                "License deactivated successfully.")
-            self._rebuild_license()
-
-    def _rebuild_license(self):
-        for i in range(self._notebook.index("end")):
-            if self._notebook.tab(i, "text") == "  License  ":
-                self._notebook.forget(i)
-                break
-        self._license_tab(self._notebook)
+        build_license_tab(notebook, self._app)
 
     def _updates_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=20)
@@ -423,11 +288,15 @@ class SettingsPage(ttk.Frame):
         from tkinter import filedialog
         path = filedialog.askdirectory(title="Select Data Folder")
         if path:
-            self.data_dir_var.set(path)
-            update_data_dir(path)
-            messagebox.showinfo("Data Location",
-                                f"Data will now be saved to:\n{path}\n\n"
-                                "Existing files must be moved manually.")
+            ok, err = update_data_dir(path)
+            if ok:
+                self.data_dir_var.set(path)
+                messagebox.showinfo("Data Location",
+                                    f"Data will now be saved to:\n{path}\n\n"
+                                    "Existing files must be moved manually.")
+            else:
+                messagebox.showerror("Invalid Data Folder",
+                                     err or "Could not use that location.")
 
     def _toggle_theme(self, *args):
         theme = self.theme_var.get()

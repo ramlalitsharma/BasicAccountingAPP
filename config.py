@@ -3,7 +3,7 @@ import sys
 import json
 from pathlib import Path
 
-VERSION = "2.9.2"
+VERSION = "2.10.0"
 APP_NAME = "Accounting Pro"
 APP_GEOMETRY = "1280x780"
 APP_MIN_SIZE = "960x640"
@@ -62,15 +62,26 @@ LOG_DIR = USER_DATA_DIR / "logs"
 
 def update_data_dir(new_path):
     global USER_DATA_DIR, DATA_DIR, BACKUP_DIR, LOG_DIR, _settings
-    _settings["data_dir"] = new_path
+    candidate = Path(new_path).expanduser().resolve(strict=False)
+    base_root = Path(__file__).parent.resolve(strict=False)
+    if candidate == base_root:
+        return False, "Cannot use the application folder as the data directory."
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+        (candidate / ".accountingpro_writable").write_text("ok")
+        (candidate / ".accountingpro_writable").unlink()
+    except OSError as exc:
+        return False, f"Cannot write to that folder: {exc}"
+    _settings["data_dir"] = str(candidate)
     _save_settings(_settings)
-    USER_DATA_DIR = Path(new_path)
+    USER_DATA_DIR = candidate
     DATA_DIR = USER_DATA_DIR / "data"
     BACKUP_DIR = USER_DATA_DIR / "backups"
     LOG_DIR = USER_DATA_DIR / "logs"
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
+    return True, None
 
 
 def _split_key(key):

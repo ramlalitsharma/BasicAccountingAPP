@@ -37,6 +37,7 @@ from ui.pages.extra_income import ExtraIncomePage
 from ui.widgets.toast import Toast
 from ui.widgets.about import AboutDialog
 from ui.pages.welcome import WelcomePage
+from utils.license import license_mgr
 from utils.update_checker import (
     check_for_update_async, get_update_status,
     update_available_info, is_update_available,
@@ -115,10 +116,64 @@ class AccountingApp(tk.Tk):
         self._poll_ui_queue()
         backup_interval = get_setting("backup_interval_minutes", 30)
         start_auto_backup(backup_interval)
+        self._init_license()
         self.after(300, self._initial_file_setup)
         self.after(400, self._maybe_run_first_run_wizard)
         self.after(600, self._maybe_run_login)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _init_license(self):
+        """Initialise the license manager: mark first run, schedule heartbeat,
+        and refresh the status bar badge with the current state."""
+        try:
+            license_mgr.mark_first_run()
+            license_mgr.schedule_heartbeat()
+            self._refresh_license_badge()
+            if license_mgr.is_free and license_mgr.is_expired:
+                self.after(2500, lambda: self.toast.show(
+                    "Free trial ended — activate a license to continue.",
+                    "warning", 5000))
+        except Exception as exc:
+            logger.warning("License init failed (continuing in free mode): %s", exc)
+
+    def _license_badge_text(self) -> str:
+        if license_mgr.is_free:
+            days = license_mgr.days_left
+            if days <= 0:
+                return "Trial ended"
+            return f"Free Trial · {days}d"
+        return f"{license_mgr.tier_name}"
+
+    def _license_badge_color(self) -> str:
+        if license_mgr.is_free:
+            if license_mgr.is_expired:
+                return DANGER_COLOR
+            days = license_mgr.days_left
+            return WARNING_COLOR if days <= 3 else TEXT_SECONDARY
+        hb = license_mgr.heartbeat_status
+        if hb in ("offline",):
+            return DANGER_COLOR
+        if hb in ("overdue", "unknown"):
+            return WARNING_COLOR
+        return SUCCESS_COLOR
+
+    def _refresh_license_badge(self):
+        if hasattr(self, "status_license_lbl") and self.status_license_lbl.winfo_exists():
+            self.status_license_lbl.config(text=self._license_badge_text(),
+                                           fg=self._license_badge_color())
+
+    def show_settings_license(self):
+        """Open Settings on the License tab (clicked from the status bar badge)."""
+        try:
+            self._navigate("settings")
+            page = self._pages.get("settings")
+            if page and hasattr(page, "_notebook"):
+                for i in range(page._notebook.index("end")):
+                    if page._notebook.tab(i, "text") == "  License  ":
+                        page._notebook.select(i)
+                        break
+        except Exception as exc:
+            logger.debug("Could not navigate to License tab: %s", exc)
 
     def _maybe_run_login(self):
         try:
@@ -370,6 +425,15 @@ class AccountingApp(tk.Tk):
         version_lbl = tk.Label(inner, text=f"v{VERSION}",
             font=(FONT_FAMILY, FONT_SIZE_SM), bg=BG_DARK, fg=TEXT_MUTED, anchor="e")
         version_lbl.pack(side=tk.RIGHT, padx=4)
+
+        sep_lic = tk.Frame(inner, bg=TEXT_MUTED, width=1)
+        sep_lic.pack(side=tk.RIGHT, fill=tk.Y, padx=4)
+
+        self.status_license_lbl = tk.Label(inner, text=self._license_badge_text(),
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            bg=BG_DARK, fg=self._license_badge_color(), anchor="e", cursor="hand2")
+        self.status_license_lbl.pack(side=tk.RIGHT, padx=4)
+        self.status_license_lbl.bind("<Button-1>", lambda e: self.show_settings_license())
 
         self._update_clock()
 

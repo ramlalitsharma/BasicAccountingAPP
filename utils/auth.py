@@ -2,6 +2,7 @@
 import json
 import os
 import hashlib
+import hmac
 import secrets
 import logging
 from datetime import datetime
@@ -29,10 +30,11 @@ def _hash_password(password, salt=None):
 
 
 def _verify_password(password, stored):
-    if ":" not in stored:
+    if not stored or ":" not in stored:
         return False
-    salt, _ = stored.split(":", 1)
-    return _hash_password(password, salt) == stored
+    salt, hash_hex = stored.split(":", 1)
+    expected = _hash_password(password, salt)
+    return hmac.compare_digest(expected, stored)
 
 
 class AuthManager:

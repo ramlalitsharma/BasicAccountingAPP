@@ -29,7 +29,7 @@ class PreordersPage(ttk.Frame):
         ttk.Label(toolbar, text="Status:").pack(side=tk.LEFT, padx=(5, 2))
         self.status_filter_var = tk.StringVar(value="all")
         self.status_filter = ttk.Combobox(toolbar, textvariable=self.status_filter_var,
-                                           values=["all", "pending", "completed", "cancelled"],
+                                           values=["all", "pending", "archived"],
                                            state="readonly", width=12)
         self.status_filter.pack(side=tk.LEFT)
         ToolTip(self.status_filter, "Filter by preorder status")
@@ -83,12 +83,30 @@ class PreordersPage(ttk.Frame):
 
     def refresh(self):
         status = self.status_filter_var.get()
+        # Translate UI filter to backend status.
+        # 'all'      -> only pending (completed/cancelled rows are deleted on action,
+        #               so any 'completed'/'cancelled' rows left in the file are
+        #               legacy from older builds — viewable via 'archived')
+        # 'pending'  -> Status == 'pending'
+        # 'archived' -> Status in ('completed','cancelled') (legacy only)
         if status == "all":
-            status = ""
+            backend_status = ""
+        elif status == "pending":
+            backend_status = "pending"
+        elif status == "archived":
+            backend_status = "archived"
+        else:
+            backend_status = status
         try:
-            data = models.get_preorders(search=self.search.get(), status=status)
+            data = models.get_preorders(search=self.search.get(), status=backend_status)
         except FileNotFoundError:
             data = []
+
+        # Apply post-filter: when 'all' is selected, drop legacy
+        # completed/cancelled rows so the live list shows only pending orders.
+        if status == "all":
+            data = [r for r in data if (r.get("Status") or "pending") == "pending"]
+
         display = []
         for r in data:
             display.append({
@@ -422,9 +440,9 @@ class PreordersPage(ttk.Frame):
         advance_type = preorder.get("Advance_Payment_Type", "none")
         payment_note = "unpaid"
         if advance_amt > 0 and advance_type == "full":
-            payment_note = f"paid (₹{advance_amt:.2f} advance already received)"
+            payment_note = f"paid ({format_currency(advance_amt)} advance already received)"
         elif advance_amt > 0 and advance_type == "partial":
-            payment_note = f"partial - ₹{advance_amt:.2f} paid, ₹{max(0, total - advance_amt):.2f} due"
+            payment_note = f"partial - {format_currency(advance_amt)} paid, {format_currency(max(0, total - advance_amt))} due"
         msg = (f"Complete this preorder?\n\n"
                f"Item: {item_name}\n"
                f"Quantity: {qty}\n"
@@ -433,7 +451,7 @@ class PreordersPage(ttk.Frame):
                f"This will:\n"
                f"  - Deduct {qty} units from stock\n"
                f"  - Record a sale as {payment_note}\n"
-               f"  - Mark preorder as completed")
+               f"  - Remove the preorder from this list")
         if not messagebox.askyesno("Confirm Complete", msg):
             return
 
@@ -444,6 +462,7 @@ class PreordersPage(ttk.Frame):
                 f"Preorder completed!\n"
                 f"Sale ID: {sale_id}\n"
                 f"Receipt: {receipt_no}\n\n"
+                f"The preorder has been removed from the list.\n"
                 f"Go to Sales > Update Payment to record payment.")
         except ValueError as e:
             messagebox.showerror("Error", str(e))
@@ -458,27 +477,38 @@ class PreordersPage(ttk.Frame):
         preorder = models.get_preorder(oid)
         if not preorder:
             return
-        if preorder.get("Status") != "pending":
-            messagebox.showwarning("Cannot Cancel", f"Only pending preorders can be cancelled. Current status: {preorder['Status']}")
+        status = preorder.get("Status", "pending")
+        if status == "completed":
+            messagebox.showwarning("Cannot Cancel", "This preorder is already completed.")
             return
-        if messagebox.askyesno("Confirm Cancel", "Cancel this preorder?"):
-            try:
-                models.cancel_preorder(oid)
-                self.refresh()
-                messagebox.showinfo("Success", "Preorder cancelled")
-            except PermissionError as e:
-                messagebox.showerror("Update Required", str(e))
-            except ValueError as e:
-                messagebox.showerror("Error", str(e))
+        if not messagebox.askyesno("Confirm Cancel",
+                "Cancel this preorder and remove it from the list?"):
+            return
+        try:
+            models.cancel_preorder(oid)
+            self.refresh()
+            messagebox.showinfo("Cancelled", "Preorder removed.")
+        except PermissionError as e:
+            messagebox.showerror("Update Required", str(e))
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
 
     def _export(self):
         status = self.status_filter_var.get()
         if status == "all":
-            status = ""
+            backend_status = ""
+        elif status == "pending":
+            backend_status = "pending"
+        elif status == "archived":
+            backend_status = "archived"
+        else:
+            backend_status = status
         try:
-            data = models.get_preorders(search=self.search.get(), status=status)
+            data = models.get_preorders(search=self.search.get(), status=backend_status)
         except FileNotFoundError:
             data = []
+        if status == "all":
+            data = [r for r in data if (r.get("Status") or "pending") == "pending"]
         headers = ["Order ID", "Customer", "Item", "Qty", "Price", "Total",
                    "Delivery Date", "Delivery Address", "Advance Amount",
                    "Advance Type", "Status", "Date"]

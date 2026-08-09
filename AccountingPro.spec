@@ -15,6 +15,12 @@ hiddenimports = [
     'matplotlib.backends.backend_pdf',
     'kiwisolver', 'numpy', 'PIL', 'PIL.ImageTk',
     'hashlib', 'hmac', 'base64',
+    # License system
+    'cryptography', 'cryptography.hazmat.primitives.asymmetric.padding',
+    'cryptography.hazmat.primitives.hashes',
+    'cryptography.hazmat.primitives.serialization',
+    'cryptography.exceptions',
+    'win32crypt',
 ]
 
 excludes = [
@@ -24,7 +30,7 @@ excludes = [
     'IPython', 'jedi', 'parso', 'nbformat', 'jsonschema',
     'zmq', 'pygments', 'wcwidth', 'prompt_toolkit',
     'numba', 'llvmlite', 'fsspec', 'lz4',
-    'cryptography', 'urllib3',
+    'urllib3',
     'babel', 'sphinx', 'docutils',
     'tests',
 ]

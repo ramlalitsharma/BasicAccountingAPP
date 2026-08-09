@@ -6,10 +6,41 @@ import hashlib
 import subprocess
 import sys
 import urllib.error
+import urllib.request
 from datetime import datetime
 from config import VERSION, CONFIG_DIR, APP_NAME, UPDATE_CHECK_URL
 
 logger = logging.getLogger(__name__)
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Block all HTTP redirects during update checks to prevent MITM redirect chains."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None  # treat redirect as failure; caller falls back to None
+
+
+_UPDATE_OPENER = urllib.request.build_opener(_NoRedirectHandler)
+
+
+def _is_https(url):
+    return url.lower().startswith("https://")
+
+
+def _safe_url_load(url, timeout, headers=None):
+    """Fetch a URL over HTTPS only with no redirects. Returns bytes or None."""
+    if not _is_https(url):
+        logger.warning("Refusing non-https update URL: %s", url)
+        return None
+    req = urllib.request.Request(url, headers=headers or {})
+    try:
+        with _UPDATE_OPENER.open(req, timeout=timeout) as resp:
+            if 200 <= getattr(resp, "status", 0) < 300:
+                return resp.read()
+        return None
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        logger.debug("Safe URL load failed for %s: %s", url, exc)
+        return None
 
 UPDATE_FILE = os.path.join(CONFIG_DIR, "update.json")
 AUTO_CHECK_INTERVAL_HOURS = 24
@@ -67,7 +98,6 @@ def _parse_version(v):
 
 def _is_online():
     try:
-        import urllib.request
         urllib.request.urlopen("https://raw.githubusercontent.com", timeout=5)
         return True
     except (urllib.error.URLError, OSError):
@@ -109,32 +139,31 @@ def check_for_update_async(callback=None, force=False):
 
 
 def _fetch_version_info():
-    try:
-        import urllib.request
-        import urllib.error
-        req = urllib.request.Request(
-            UPDATE_CHECK_URL,
-            headers={"User-Agent": f"{APP_NAME}/{VERSION}"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        state = _load()
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        state["last_check"] = now_str
-        state["last_online_check"] = now_str
-        state["latest_version"] = data.get("latest_version", "")
-        state["min_version"] = data.get("min_version", "")
-        state["force_update"] = data.get("force_update", False)
-        state["download_url"] = data.get("download_url", "")
-        state["changelog"] = data.get("changelog", "")
-        state["release_date"] = data.get("release_date", "")
-        state["file_size_mb"] = data.get("file_size_mb", 0)
-        state["sha256_hash"] = data.get("sha256_hash", "")
-        _save(state)
-        return data
-    except (json.JSONDecodeError, OSError) as e:
-        logger.debug(f"Update check failed: {e}")
+    raw = _safe_url_load(UPDATE_CHECK_URL, timeout=10,
+                         headers={"User-Agent": f"{APP_NAME}/{VERSION}"})
+    if raw is None:
         return None
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as e:
+        logger.debug("Update JSON parse failed: %s", e)
+        return None
+    if not isinstance(data, dict):
+        return None
+    state = _load()
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    state["last_check"] = now_str
+    state["last_online_check"] = now_str
+    state["latest_version"] = str(data.get("latest_version", "") or "")
+    state["min_version"] = str(data.get("min_version", "") or "")
+    state["force_update"] = bool(data.get("force_update", False))
+    state["download_url"] = str(data.get("download_url", "") or "")
+    state["changelog"] = str(data.get("changelog", "") or "")
+    state["release_date"] = str(data.get("release_date", "") or "")
+    state["file_size_mb"] = int(data.get("file_size_mb", 0) or 0)
+    state["sha256_hash"] = str(data.get("sha256_hash", "") or "")
+    _save(state)
+    return data
 
 
 def get_latest_version():
@@ -262,55 +291,38 @@ def needs_auto_check():
 
 def download_update_async(download_url, callback=None):
     def _download():
-        import urllib.request
         import tempfile
         try:
+            if not _is_https(download_url):
+                raise ValueError("Download URL must be HTTPS")
             temp_dir = CONFIG_DIR
             os.makedirs(temp_dir, exist_ok=True)
-            file_ext = ".exe" if ".exe" in download_url else ".msi"
+            file_ext = ".exe" if ".exe" in download_url.lower() else ".msi"
             temp_path = os.path.join(temp_dir, f"{APP_NAME}_update{file_ext}")
 
-            req = urllib.request.Request(
-                download_url,
-                headers={"User-Agent": f"{APP_NAME}/{VERSION}"},
-            )
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                total_size = int(resp.headers.get("Content-Length", 0))
-                downloaded = 0
-                last_reported = -1
-                chunk_size = 65536
-                with open(temp_path, "wb") as f:
-                    while True:
-                        chunk = resp.read(chunk_size)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size > 0:
-                            progress = int(downloaded / total_size * 100)
-                        else:
-                            progress = 0
-                        if progress != last_reported:
-                            last_reported = progress
-                            state = _load()
-                            state["download_progress"] = progress
-                            _save(state)
-
-            # Verify downloaded file is not HTML (e.g., from gofile JS page)
-            _is_valid = False
+            raw = _safe_url_load(download_url, timeout=300,
+                                 headers={"User-Agent": f"{APP_NAME}/{VERSION}"})
+            if raw is None:
+                if callback:
+                    callback({"success": False, "error": "Download failed (HTTPS-only)"})
+                return
+            total_size = len(raw)
             try:
-                with open(temp_path, "rb") as vf:
-                    magic = vf.read(4)
-                    # PE executable: MZ (4D 5A)
-                    # MSI: usually starts with MZ or D0 CF
-                    if magic[:2] == b'MZ':
-                        _is_valid = True
-            except OSError:
-                pass
-            if _is_valid:
+                with open(temp_path, "wb") as f:
+                    f.write(raw)
+            except OSError as e:
+                if callback:
+                    callback({"success": False, "error": str(e)})
+                return
+
+            try:
+                magic = raw[:2]
+            except IndexError:
+                magic = b""
+            if magic == b"MZ":
                 mark_update_downloaded(temp_path)
                 if callback:
-                    callback({"success": True, "path": temp_path})
+                    callback({"success": True, "path": temp_path, "size": total_size})
             else:
                 try:
                     os.remove(temp_path)
@@ -319,7 +331,7 @@ def download_update_async(download_url, callback=None):
                 logger.error("Downloaded file is not a valid PE executable")
                 if callback:
                     callback({"success": False, "error": "Downloaded file is not a valid executable"})
-        except (FileNotFoundError, OSError) as e:
+        except (FileNotFoundError, OSError, ValueError) as e:
             logger.exception("Download failed")
             if callback:
                 callback({"success": False, "error": str(e)})
@@ -347,32 +359,40 @@ def verify_download(filepath, expected_hash):
 
 
 def install_update(filepath):
-    logger.info(f"Launching update installer: {filepath}")
+    logger.info("Launching update installer: %s", filepath)
     if not os.path.isfile(filepath):
-        logger.error(f"Update file not found: {filepath}")
+        logger.error("Update file not found: %s", filepath)
         return
     try:
+        abs_path = os.path.abspath(filepath)
+        if not abs_path.startswith(os.path.abspath(CONFIG_DIR)):
+            logger.error("Refusing to install update outside CONFIG_DIR: %s", abs_path)
+            return
         old_exe = sys.executable if getattr(sys, "frozen", False) else None
         if old_exe:
             bat_path = os.path.join(CONFIG_DIR, "_update_launcher.bat")
-            sanitized = os.path.normpath(filepath)
+            exe_basename = os.path.basename(old_exe)
+            installer_basename = os.path.basename(abs_path)
+            bat_lines = [
+                "@echo off",
+                "echo Updating Accounting Pro...",
+                "timeout /t 3 /nobreak >nul",
+                f'taskkill /f /im "{exe_basename}" 2>nul',
+                "timeout /t 2 /nobreak >nul",
+                f'start "" "%~dp0{installer_basename}"',
+                'del "%~f0"',
+            ]
             with open(bat_path, "w") as bat:
-                bat.write('@echo off\n')
-                bat.write('echo Updating Accounting Pro...\n')
-                bat.write('timeout /t 3 /nobreak >nul\n')
-                bat.write('taskkill /f /im "' + os.path.basename(old_exe) + '" 2>nul\n')
-                bat.write('timeout /t 2 /nobreak >nul\n')
-                bat.write('start "" "' + sanitized + '"\n')
-                bat.write('del "%~f0"\n')
+                bat.write("\n".join(bat_lines) + "\n")
             subprocess.Popen(
-                ['cmd', '/c', bat_path],
+                ["cmd", "/c", bat_path],
                 creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
                 close_fds=True,
             )
         else:
-            os.startfile(filepath)
+            os.startfile(abs_path)
     except OSError as e:
-        logger.error(f"Failed to launch update: {e}")
+        logger.error("Failed to launch update: %s", e)
 
 
 def auto_update_on_launch():

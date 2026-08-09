@@ -213,9 +213,24 @@ def _render_html(sale_data):
 
 
 def print_bill(sale_data):
-    html = _render_html(sale_data)
-    tmp = os.path.join(tempfile.gettempdir(),
-                       f"invoice_{sale_data.get('id', 0)}.html")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(html)
-    webbrowser.open(tmp)
+    rendered = _render_html(sale_data)
+    tmp_dir = tempfile.mkdtemp(prefix="accountingpro_invoice_")
+    sale_id = sale_data.get("id", 0)
+    try:
+        sale_id = int(sale_id)
+    except (ValueError, TypeError):
+        sale_id = abs(hash(str(sale_id)))
+    tmp = os.path.join(tmp_dir, f"invoice_{sale_id}.html")
+    fd, tmp_tmp = tempfile.mkstemp(prefix="invoice_", suffix=".html",
+                                    dir=tmp_dir, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(rendered)
+        os.replace(tmp_tmp, tmp)
+        webbrowser.open("file://" + tmp.replace("\\", "/"))
+    except Exception:
+        try:
+            os.unlink(tmp_tmp)
+        except OSError:
+            pass
+        raise

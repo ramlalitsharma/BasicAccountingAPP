@@ -1109,7 +1109,9 @@ def get_preorders(search="", status="", from_date="", to_date=""):
         r["customer_name"] = cust.get("Name", "Unknown")
         if search and search.lower() not in r["customer_name"].lower() and search.lower() not in r["item_name"].lower():
             continue
-        if status and r.get("Status", "pending") != status:
+        if status and status != "archived" and r.get("Status", "pending") != status:
+            continue
+        if status == "archived" and r.get("Status", "pending") not in ("completed", "cancelled"):
             continue
         sd = r.get("Created_At", "")
         if from_date and sd and sd[:10] < from_date:
@@ -1179,17 +1181,28 @@ def delete_preorder(preorder_id):
 
 @synchronized
 def cancel_preorder(preorder_id):
+    """Cancel a preorder by deleting it outright.
+
+    The user asked that cancelling *removes* the row from the list rather than
+    leaving it tagged as 'cancelled', so this delegates to delete_preorder
+    after validating that the order still exists. There is no status column
+    flip — the row is gone from disk immediately.
+    """
     _check_write_lock()
     wb = _get_wb()
     try:
         ws = wb["Preorders"]
         data = _sheet_to_dicts(ws)
-        for r in data:
-            if r.get("ID") == preorder_id:
-                r["Status"] = "cancelled"
-                break
+        preorder = next((r for r in data if r.get("ID") == preorder_id), None)
+        if preorder is None:
+            raise ValueError("Preorder not found")
+        if preorder.get("Status") == "completed":
+            raise ValueError("Cannot cancel a completed preorder")
+        # Drop the row entirely.
+        data = [r for r in data if r.get("ID") != preorder_id]
         _dicts_to_sheet(ws, data, SHEETS["Preorders"])
         _save_and_close(wb)
+        _audit("DELETE", "Preorder", preorder_id)
     except Exception:
         _close_wb(wb)
         raise
@@ -1197,6 +1210,13 @@ def cancel_preorder(preorder_id):
 
 @synchronized
 def complete_preorder(preorder_id):
+    """Complete a preorder: write a Sale, deduct stock, then DELETE the row.
+
+    The user asked that completing wipes the preorder from the list (rather
+    than leaving it tagged 'completed'). The Sale row already persists the
+    accounting event, and the stock ledger already records the deduction —
+    keeping a duplicate 'completed' preorder row was redundant.
+    """
     _check_write_lock()
     wb = _get_wb()
     try:
@@ -1261,12 +1281,8 @@ def complete_preorder(preorder_id):
         _log_stock_change_internal(wb, stock_id, "sale", -qty,
                                     old_qty, f"Sold {qty} units (preorder #{preorder_id})")
 
-        for r in data:
-            if r.get("ID") == preorder_id:
-                r["Status"] = "completed"
-                r["Completed_At"] = _now()
-                r["Sale_ID"] = sid
-                break
+        # Now remove the preorder row — completed preorder is gone from the list.
+        data = [r for r in data if r.get("ID") != preorder_id]
         _dicts_to_sheet(ws, data, SHEETS["Preorders"])
 
         _save_and_close(wb)
