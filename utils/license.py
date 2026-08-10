@@ -52,9 +52,11 @@ logger = logging.getLogger(__name__)
 
 # ── paths & server config ─────────────────────────────────────────────────
 LICENSE_FILE = os.path.join(str(CONFIG_DIR), "license.enc")
+# Production: Cloudflare Workers at accountingpro-license-server.ramlalitsharma01.workers.dev
+# Override locally via the ACCOUNTINGPRO_LICENSE_SERVER environment variable.
 LICENSE_SERVER_URL = os.environ.get(
     "ACCOUNTINGPRO_LICENSE_SERVER",
-    "https://accountingpro-license.vercel.app/api",
+    "https://accountingpro-license-server.ramlalitsharma01.workers.dev/api",
 )
 
 HEARTBEAT_INTERVAL_DAYS = 7
