@@ -159,6 +159,9 @@ def build_license_tab(notebook: ttk.Notebook, app_ctx: Any) -> ttk.Frame:
         ttk.Button(btn_frame, text="Refresh Heartbeat",
                    command=lambda: _do_heartbeat(app_ctx)
                    ).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(btn_frame, text="Register with Server",
+                   command=lambda: _do_register(app_ctx)
+                   ).pack(side=tk.LEFT, padx=(0, 6))
         ttk.Button(btn_frame, text="Deactivate",
                    command=lambda: _do_deactivate(app_ctx, frame)
                    ).pack(side=tk.LEFT, padx=(0, 6))
@@ -292,6 +295,21 @@ def _show_activate_dialog(app_ctx: Any, frame: ttk.Frame) -> None:
     ttk.Button(btn_bar, text="Activate", command=do_activate).pack(side=tk.LEFT, padx=(0, 6))
     ttk.Button(btn_bar, text="Cancel",
                command=lambda: app_ctx.close_modal()).pack(side=tk.LEFT)
+
+
+def _do_register(app_ctx: Any) -> None:
+    """Re-send the stored signed token to the license server (repair path for
+    older activations which the server has never seen)."""
+    ok, msg = license_mgr.register_with_server()
+    try:
+        app_ctx.toast.show(msg, "success" if ok else "warning", 6000)
+    except Exception:
+        pass
+    if not ok:
+        messagebox.showinfo("Register with Server", msg)
+    else:
+        # Get a heartbeat immediately so the badge/badges reflect the truth.
+        _do_heartbeat(app_ctx)
 
 
 def _do_heartbeat(app_ctx: Any) -> None:

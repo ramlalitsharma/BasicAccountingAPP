@@ -1,10 +1,10 @@
 {
-  "latest_version": "2.11.0",
+  "latest_version": "2.11.1",
   "min_version": "2.10.0",
   "force_update": false,
-  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.11.0/AccountingPro_Setup_v2.11.0.exe",
-  "changelog": "v2.11.0 — Customer portal (PWA + phone/PIN login, multi-shop), notifications suite (SMTP email + WhatsApp receipt/reminders), PDF invoices, per-vertical fields (pharmacy batch/expiry/schedule…), drug-schedule checks, weight pricing, recipe auto-deduction, bank reconciliation page, P&L/Tax/Top-Items reports, per-user layouts (cards + sidebar), credit limits & customer statements, hardened auth (lockout + PBKDF2-310k), UPI/payment-instruction lines on invoices, cloud backup endpoint (R2).",
+  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.11.1/AccountingPro_Setup_v2.11.1.exe",
+  "changelog": "v2.11.1 — FIX: licenses activated offline now self-register with the license server automatically (fixes 'heartbeat never runs', portal/backup staying locked, and customer portal invites failing with 'license not found'); server verifies the token signature. Plus: Cloudflare bot-rule-proof HTTPS headers for all server calls.",
   "release_date": "2026-09-25",
-  "file_size_mb": 45.33,
-  "sha256_hash": "af862b76cec37c6d4c478a3daa60defd633591dddb6dd3661db7c9460215dc96"
+  "file_size_mb": 45.34,
+  "sha256_hash": "550bb240dba1ad78dbd80079b22fb250eb536cd2c58a0571aeed4fb0386aebad"
 }

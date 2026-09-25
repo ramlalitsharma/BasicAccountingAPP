@@ -1,8 +1,8 @@
-; Accounting Pro v2.11.0 Installer
+; Accounting Pro v2.11.1 Installer
 ; Requires Inno Setup 6.2+ (https://jrsoftware.org/isdl.php)
 
 #define MyAppName "Accounting Pro"
-#define MyAppVersion "2.11.0"
+#define MyAppVersion "2.11.1"
 #define MyAppPublisher "Accounting Pro"
 #define MyAppURL "https://github.com/ramlalitsharma/BasicAccountingAPP"
 #define MyAppExeName "AccountingPro.exe"

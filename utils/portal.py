@@ -67,14 +67,16 @@ def _post(path: str, payload: dict, timeout: int = _TIMEOUT) -> Tuple[bool, str]
         data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={"Content-Type": "application/json; charset=utf-8",
-                 "User-Agent": "AccountingPro Portal/1"},
+                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AccountingPro/2.11.1 Desktop"},
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             ok = 200 <= getattr(resp, "status", 0) < 300
             data = json.loads(resp.read().decode("utf-8"))
-        return (ok and bool(data.get("ok", ok)),
-                str(data.get("error") or data.get("message") or "OK" if ok else "failed"))
+        if ok:
+            return True, str(data.get("message") or "OK")
+        err = data.get("error") or data.get("message") or f"HTTP {getattr(resp, 'status', '?')}"
+        return False, str(err)
     except urllib.error.HTTPError as exc:
         try:
             data = json.loads(exc.read().decode("utf-8"))

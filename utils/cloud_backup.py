@@ -146,7 +146,8 @@ def upload_backup_file(path: str = None):
         "app_version": VERSION,
     }
     body, boundary = _multipart_body(fields, "file", path)
-    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}",
+               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AccountingPro/2.11.1 Desktop"}
     token = load_token()
     if token:
         headers["Authorization"] = f"Bearer {token}"

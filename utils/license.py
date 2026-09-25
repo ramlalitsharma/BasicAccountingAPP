@@ -106,6 +106,11 @@ def _load_public_key():
 PUBLIC_KEY = _load_public_key()
 
 
+# Cloudflare's default bot rules (error 1010) intermittently block raw
+# python-urllib user agents on worker endpoints; identify as a desktop app.
+_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AccountingPro/2.11.1 Desktop"
+
+
 # ── helpers ────────────────────────────────────────────────────────────────
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -273,6 +278,10 @@ class LicenseManager:
                 "features_override": token.get("features", {}) or {},
                 "machine_id": self._machine_id,
                 "machine_label": get_machine_label(),
+                # Keep the complete signed token so we can self-register with
+                # the server later (heartbeat/revocation/portal need a row
+                # server-side even for offline-issued licenses).
+                "token": token,
             })
             self._save()
         # Best-effort first heartbeat; ignore failures (license still valid).
@@ -552,7 +561,7 @@ class LicenseManager:
             method="POST",
             headers={
                 "Content-Type": "application/json; charset=utf-8",
-                "User-Agent": "AccountingPro License/2",
+                "User-Agent": _USER_AGENT,
                 "Accept": "application/json",
             },
         )
@@ -562,6 +571,18 @@ class LicenseManager:
                     return json.loads(resp.read().decode("utf-8"))
                 logger.warning("Heartbeat non-2xx from %s: %s", url, resp.status)
                 return None
+        except urllib.error.HTTPError as exc:
+            # 4xx/5xx from the server still carry a JSON body ({"ok": false,
+            # "error": ...}) — parse it so callers can react (e.g. the
+            # "license not found" -> self-register flow).
+            try:
+                body = json.loads(exc.read().decode("utf-8"))
+                if isinstance(body, dict) and body:
+                    return body
+            except Exception:
+                pass
+            logger.debug("Heartbeat HTTP error from %s: %s", url, exc.code)
+            return None
         except Exception as exc:
             logger.debug("Heartbeat network error: %s", exc)
             return None
@@ -575,10 +596,17 @@ class LicenseManager:
         if result is None:
             return False
         if not result.get("ok"):
-            # The server rejected us. Mark revoked so feature gates drop
-            # the user down to free tier (still respecting grace period:
-            # the next successful heartbeat restores privileges).
             err = str(result.get("error") or "")
+            # "license not found" = valid offline-issued token that the server
+            # has never seen: self-register once, then retry the heartbeat.
+            if "not found" in err.lower() and not getattr(self, "_tried_register", False):
+                self._tried_register = True
+                reg_ok, reg_msg = self.register_with_server()
+                logger.info("Self-registration attempt: %s", reg_msg)
+                if reg_ok:
+                    result = self._http_post(url, payload)
+                    if result is not None and result.get("ok"):
+                        return self._finish_heartbeat_ok(result)
             revoked = "revoked" in err.lower() or bool(result.get("revoked"))
             self.apply_server_state(
                 revoked=revoked,
@@ -587,6 +615,9 @@ class LicenseManager:
                 machine_limit_exceeded=bool(result.get("machine_limit_exceeded")),
             )
             return False
+        return self._finish_heartbeat_ok(result)
+
+    def _finish_heartbeat_ok(self, result: Dict[str, Any]) -> bool:
         self.apply_server_state(
             revoked=bool(result.get("revoked")),
             active_machines=int(result.get("active_machines") or 0),
@@ -601,6 +632,28 @@ class LicenseManager:
             self._license["heartbeat_success"] = True
             self._save()
         return True
+
+    def register_with_server(self) -> Tuple[bool, str]:
+        """Self-register this offline-issued license with the license server:
+        sends the original signed token; the server verifies the RSA
+        signature and creates its row (existing rows are never overwritten).
+        """
+        if self.tier == "free":
+            return False, "Free trial has no server-side license."
+        token = self._license.get("token")
+        if not isinstance(token, dict) or not token.get("sig"):
+            return False, ("This installation was activated with an older app version "
+                           "that didn't keep the signed token. Re-activate with your "
+                           "original token (Settings → License) once to repair this.")
+        payload = {"machine_id": self._machine_id, "token": token}
+        result = self._http_post(f"{LICENSE_SERVER_URL}/register", payload)
+        if result is None:
+            return False, "Could not reach the license server (offline?)."
+        if not result.get("ok"):
+            return False, str(result.get("error") or "Registration rejected by server.")
+        if result.get("already_exists"):
+            return True, "License already known to the server."
+        return True, "License registered with the server."
 
     def send_heartbeat_now(self) -> Tuple[bool, str]:
         """Manual/run-now heartbeat invoked from the UI. Returns (ok, message)."""
