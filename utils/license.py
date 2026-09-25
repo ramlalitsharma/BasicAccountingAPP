@@ -146,6 +146,12 @@ class LicenseManager:
     def _load(self) -> Dict[str, Any]:
         data = self._store.load()
         if data:
+            # Backfill any new server-state keys so older license.enc files
+            # (written before these fields existed) still load without KeyError.
+            data.setdefault("server_revoked", False)
+            data.setdefault("active_machines", 0)
+            data.setdefault("machine_limit_exceeded", False)
+            data.setdefault("admin_feature_override", {})
             return data
         return {
             "version": 2,
@@ -154,6 +160,10 @@ class LicenseManager:
             "first_run": None,
             "last_heartbeat": None,
             "heartbeat_success": False,
+            "server_revoked": False,
+            "active_machines": 0,
+            "machine_limit_exceeded": False,
+            "admin_feature_override": {},
         }
 
     def _save(self) -> None:
@@ -288,7 +298,50 @@ class LicenseManager:
     # ── read-only properties ───────────────────────────────────────────────
     @property
     def tier(self) -> str:
+        """The tier stored on disk. NOT what the app should use for gating
+        — use ``effective_tier`` for that."""
         return self._license.get("tier", "free")
+
+    @property
+    def effective_tier(self) -> str:
+        """The tier the app should use for feature gating.
+
+        Downgrades from the stored tier to 'free' if any of:
+          - the license is past its expiry date (is_expired)
+          - the server last reported the license as revoked
+          - the local user is one too many activations (server flagged
+            machine_limit_exceeded=True)
+        """
+        if self.tier == "free":
+            return "free"
+        if self.is_expired:
+            return "free"
+        if self._server_revoked:
+            return "free"
+        if self._machine_limit_exceeded:
+            return "free"
+        return self.tier
+
+    @property
+    def effective_tier_name(self) -> str:
+        return _TIER_LABELS.get(self.effective_tier, "Free Trial")
+
+    @property
+    def _server_revoked(self) -> bool:
+        """Did the most recent server heartbeat mark the license as revoked?
+        Cached locally so the app can downgrade features between heartbeats."""
+        return bool(self._license.get("server_revoked"))
+
+    @property
+    def _machine_limit_exceeded(self) -> bool:
+        return bool(self._license.get("machine_limit_exceeded"))
+
+    @property
+    def active_machines_server(self) -> int:
+        try:
+            return int(self._license.get("active_machines", 0))
+        except (ValueError, TypeError):
+            return 0
 
     @property
     def tier_name(self) -> str:
@@ -296,19 +349,25 @@ class LicenseManager:
 
     @property
     def is_free(self) -> bool:
+        """True iff the stored tier is free."""
         return self.tier == "free"
 
     @property
     def is_pro(self) -> bool:
-        return self.tier in ("pro", "enterprise")
+        """True iff the effective (gating) tier is pro or enterprise.
+
+        Returns False if the license is expired / revoked / over-limit —
+        even if the stored tier says pro. Use this for feature gates.
+        """
+        return self.effective_tier in ("pro", "enterprise")
 
     @property
     def is_enterprise(self) -> bool:
-        return self.tier == "enterprise"
+        return self.effective_tier == "enterprise"
 
     @property
     def max_stock_items(self) -> int:
-        return _MAX_STOCK_MAP.get(self.tier, FREE_MAX_STOCK)
+        return _MAX_STOCK_MAP.get(self.effective_tier, FREE_MAX_STOCK)
 
     @property
     def max_machines(self) -> int:
@@ -364,6 +423,9 @@ class LicenseManager:
 
     @property
     def is_expired(self) -> bool:
+        """Expired by *date* — independent of server-side revoke."""
+        if self.tier == "free":
+            return False  # free trial is a separate concept
         return self.days_left <= 0
 
     @property
@@ -376,9 +438,11 @@ class LicenseManager:
 
     @property
     def heartbeat_status(self) -> str:
-        """One of: ok, overdue, never, offline."""
+        """One of: ok, overdue, never, offline, revoked."""
         if self.tier == "free":
             return "n/a"
+        if self._server_revoked:
+            return "revoked"
         last = self._license.get("last_heartbeat")
         if not last:
             return "never"
@@ -393,11 +457,65 @@ class LicenseManager:
         except (ValueError, TypeError):
             return "unknown"
 
+    @property
+    def feature_gate_reason(self) -> str:
+        """Human-readable explanation of why effective_tier is what it is."""
+        if self.tier == "free":
+            return "Free trial"
+        if self.is_expired:
+            return f"License expired {abs(self.days_left)} day(s) ago"
+        if self._server_revoked:
+            return "License was revoked by the server"
+        if self._machine_limit_exceeded:
+            return ("Machine limit exceeded — "
+                    f"{self.active_machines_server} / {self.max_machines} activations on the server")
+        return ""
+
     def has_feature(self, feature_id: str) -> bool:
-        overrides = self._license.get("features_override", {})
-        if isinstance(overrides, dict) and feature_id in overrides:
-            return bool(overrides[feature_id])
+        """Feature gate. Honors the stored feature overrides from the token
+        AND the per-license override list (admin can edit features
+        remotely). Returns False when the license is degraded
+        (expired/revoked/over-limit) for any feature not in the
+        ``free_always`` allow-list (e.g. CSV export still works on free)."""
+        FREE_ALWAYS = {"csv_export", "local_backup", "basic_reports"}
+        if feature_id in FREE_ALWAYS:
+            return True
+        # If effective tier is 'free' (degraded), deny pro features.
+        if self.effective_tier == "free":
+            return False
+        # Allow admin-controlled per-feature overrides (set via dashboard).
+        admin_override = self._license.get("admin_feature_override", {})
+        if isinstance(admin_override, dict) and feature_id in admin_override:
+            return bool(admin_override[feature_id])
+        # Otherwise fall back to the token-time feature flags.
+        token_features = self._license.get("features_override", {})
+        if isinstance(token_features, dict) and feature_id in token_features:
+            return bool(token_features[feature_id])
+        # No override -> allow if effective_tier is non-free.
         return True
+
+    def apply_server_state(self, *, revoked: bool, active_machines: int,
+                            max_machines: int, machine_limit_exceeded: bool,
+                            tier: str = "", expires: str = "",
+                            admin_feature_override: Optional[Dict[str, bool]] = None) -> None:
+        """Persist the most recent server heartbeat's policy state into DPAPI
+        storage so the next feature-gate call doesn't depend on a network
+        round-trip.
+        """
+        with self._lock:
+            self._license["server_revoked"] = bool(revoked)
+            self._license["active_machines"] = int(active_machines)
+            self._license["max_machines"] = int(max_machines)
+            self._license["machine_limit_exceeded"] = bool(machine_limit_exceeded)
+            if tier:
+                self._license["tier"] = tier
+            if expires:
+                self._license["expires"] = expires
+            if admin_feature_override is not None and isinstance(admin_feature_override, dict):
+                self._license["admin_feature_override"] = {
+                    str(k): bool(v) for k, v in admin_feature_override.items()
+                }
+            self._save()
 
     # ── trial tracking ────────────────────────────────────────────────────
     def mark_first_run(self) -> None:
@@ -454,13 +572,35 @@ class LicenseManager:
         url = f"{LICENSE_SERVER_URL}/heartbeat"
         payload = self._build_heartbeat_payload()
         result = self._http_post(url, payload)
-        if result and result.get("ok"):
-            with self._lock:
-                self._license["last_heartbeat"] = _now_iso()
-                self._license["heartbeat_success"] = True
-                self._save()
-            return True
-        return False
+        if result is None:
+            return False
+        if not result.get("ok"):
+            # The server rejected us. Mark revoked so feature gates drop
+            # the user down to free tier (still respecting grace period:
+            # the next successful heartbeat restores privileges).
+            err = str(result.get("error") or "")
+            revoked = "revoked" in err.lower() or bool(result.get("revoked"))
+            self.apply_server_state(
+                revoked=revoked,
+                active_machines=self.active_machines_server,
+                max_machines=int(result.get("max_machines") or self.max_machines),
+                machine_limit_exceeded=bool(result.get("machine_limit_exceeded")),
+            )
+            return False
+        self.apply_server_state(
+            revoked=bool(result.get("revoked")),
+            active_machines=int(result.get("active_machines") or 0),
+            max_machines=int(result.get("max_machines") or self.max_machines),
+            machine_limit_exceeded=bool(result.get("machine_limit_exceeded")),
+            tier=str(result.get("tier") or ""),
+            expires=str(result.get("expires") or ""),
+            admin_feature_override=result.get("features"),
+        )
+        with self._lock:
+            self._license["last_heartbeat"] = _now_iso()
+            self._license["heartbeat_success"] = True
+            self._save()
+        return True
 
     def send_heartbeat_now(self) -> Tuple[bool, str]:
         """Manual/run-now heartbeat invoked from the UI. Returns (ok, message)."""

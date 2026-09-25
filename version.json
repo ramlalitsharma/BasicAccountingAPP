@@ -1,10 +1,10 @@
 {
-  "latest_version": "2.10.1",
+  "latest_version": "2.11.0",
   "min_version": "2.10.0",
   "force_update": false,
-  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.10.1/AccountingPro_Setup_v2.10.1.exe",
-  "changelog": "v2.10.1 - Point License server URL at the live Cloudflare Worker at https://accountingpro-license-server.ramlalitsharma01.workers.dev/api. (No other code changes from v2.10.0.)",
-  "release_date": "2026-08-10",
-  "file_size_mb": 45.09,
-  "sha256_hash": "79178a454ca0f7a1f336b1a9ec6739b2ebabeeff700e850840baca723c620860"
+  "download_url": "https://github.com/ramlalitsharma/BasicAccountingAPP/releases/download/v2.11.0/AccountingPro_Setup_v2.11.0.exe",
+  "changelog": "v2.11.0 — Customer portal (PWA + phone/PIN login, multi-shop), notifications suite (SMTP email + WhatsApp receipt/reminders), PDF invoices, per-vertical fields (pharmacy batch/expiry/schedule…), drug-schedule checks, weight pricing, recipe auto-deduction, bank reconciliation page, P&L/Tax/Top-Items reports, per-user layouts (cards + sidebar), credit limits & customer statements, hardened auth (lockout + PBKDF2-310k), UPI/payment-instruction lines on invoices, cloud backup endpoint (R2).",
+  "release_date": "2026-09-25",
+  "file_size_mb": 45.33,
+  "sha256_hash": "af862b76cec37c6d4c478a3daa60defd633591dddb6dd3661db7c9460215dc96"
 }

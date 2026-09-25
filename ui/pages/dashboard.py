@@ -174,6 +174,17 @@ class DashboardPage(ttk.Frame):
             ("Extra Income Today", "extra_income_today", "\u2726", "#7C3AED", "#F5F3FF"),
             ("Total Customers", "total_customers", "\u25CF", "#0D9488", "#F0FDFA"),
         ]
+        from utils.settings_helper import is_feature_enabled, get_user_setting
+        if is_feature_enabled("expiry_tracking"):
+            cards_data.append(("Expiring Soon", "expiring_soon", "\u231B", "#B45309", "#FFFBEB"))
+
+        hidden = set(get_user_setting("dashboard.hidden_cards", []) or [])
+        cards_data = [c for c in cards_data if c[1] not in hidden]
+        # User-saved card order (Settings → General) re-sorts the grid.
+        saved_order = get_user_setting("dashboard.card_order", []) or []
+        if saved_order:
+            pos = {k: i for i, k in enumerate(saved_order)}
+            cards_data.sort(key=lambda c: pos.get(c[1], len(pos)))
 
         cards_grid = tk.Frame(cf, bg=BG_COLOR)
         cards_grid.pack(fill=tk.X, padx=PADDING_LG, pady=(0, 10))
@@ -181,6 +192,7 @@ class DashboardPage(ttk.Frame):
         click_map = {
             "total_items": self._show_all_items,
             "total_pending": self._show_pending_customers,
+            "expiring_soon": self._show_expiring_items,
         }
         for i, (label, key, icon, color, card_bg) in enumerate(cards_data):
             on_click = click_map.get(key)
@@ -228,6 +240,17 @@ class DashboardPage(ttk.Frame):
                 self._fig_monthly, self._ax_monthly, self._canvas_monthly = fig, ax, canvas_w
             else:
                 self._fig_stock, self._ax_stock, self._canvas_stock = fig, ax, canvas_w
+
+        # ---- CHARTS ROW 3: Top items (full width) ----
+        charts3 = tk.Frame(cf, bg=BG_COLOR)
+        charts3.pack(fill=tk.X, padx=PADDING_LG, pady=(0, 10))
+        wrap3 = ttk.LabelFrame(charts3, text="Top Selling Items (by revenue)", padding=8)
+        wrap3.pack(fill=tk.X, padx=4)
+        fig3 = Figure(figsize=(9, 2.6), dpi=80, facecolor="#F8FAFC")
+        ax3 = fig3.add_subplot(111)
+        canvas3 = FigureCanvasTkAgg(fig3, wrap3)
+        canvas3.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self._fig_top, self._ax_top, self._canvas_top = fig3, ax3, canvas3
 
         # ---- RECENT ACTIVITY SECTION ----
         activity_frame = tk.Frame(cf, bg=BG_COLOR)
@@ -296,13 +319,51 @@ class DashboardPage(ttk.Frame):
         for d in dates:
             day_sales = [s for s in sales if str(s.get("Sale_Date") or "")[:10] == d]
             revenues.append(sum(safe_float(s.get("Total", 0)) for s in day_sales))
-        self._ax_trend.plot(dates, revenues, marker="o", color="#2563EB", linewidth=2)
-        self._ax_trend.set_xticks(range(len(dates)))
+        xs = range(len(dates))
+        # Premium look: area fill under the line + markers + soft grid
+        self._ax_trend.fill_between(xs, revenues, color="#2563EB", alpha=0.15)
+        self._ax_trend.plot(xs, revenues, marker="o", color="#2563EB",
+                            linewidth=2.2, markersize=5,
+                            markerfacecolor="#3B82F6", markeredgecolor="white")
+        self._ax_trend.set_xticks(xs)
         self._ax_trend.set_xticklabels([d[-5:] for d in dates], rotation=45, fontsize=8)
         self._ax_trend.set_ylabel("Revenue", fontsize=9)
-        self._ax_trend.grid(True, alpha=0.3)
+        self._ax_trend.grid(True, alpha=0.25, linestyle="--")
+        for spine in ("top", "right"):
+            self._ax_trend.spines[spine].set_visible(False)
         self._fig_trend.tight_layout()
         self._canvas_trend.draw()
+
+    def _plot_top_items(self):
+        self._ax_top.clear()
+        sales = self._safe_get_sales()
+        if not sales:
+            self._ax_top.text(0.5, 0.5, "No sales yet", ha="center", va="center", fontsize=10)
+            self._fig_top.tight_layout()
+            self._canvas_top.draw()
+            return
+        per_item = {}
+        for s in sales:
+            name = s.get("item_name") or "Unknown"
+            per_item[name] = per_item.get(name, 0.0) + safe_float(s.get("Total", 0))
+        top = sorted(per_item.items(), key=lambda kv: kv[1], reverse=True)[:8]
+        names = [n for n, _ in top][::-1]
+        vals = [v for _, v in top][::-1]
+        colors = ["#93C5FD", "#60A5FA", "#3B82F6", "#2563EB",
+                  "#1D4ED8", "#1E40AF", "#1E3A8A", "#172554"][:len(vals)]
+        bars = self._ax_top.barh(names, vals, color=colors, height=0.55)
+        for bar, v in zip(bars, vals):
+            self._ax_top.text(v, bar.get_y() + bar.get_height() / 2, f" {format_currency(v)}",
+                              va="center", fontsize=8, color="#1E293B")
+        max_v = max(vals) if vals else 1
+        self._ax_top.set_xlim(0, max_v * 1.18)
+        self._ax_top.tick_params(axis="y", labelsize=8)
+        self._ax_top.tick_params(axis="x", labelsize=8)
+        self._ax_top.grid(True, axis="x", alpha=0.25, linestyle="--")
+        for spine in ("top", "right"):
+            self._ax_top.spines[spine].set_visible(False)
+        self._fig_top.tight_layout()
+        self._canvas_top.draw()
 
     def _plot_payment_breakdown(self):
         self._ax_pie.clear()
@@ -384,6 +445,17 @@ class DashboardPage(ttk.Frame):
         stats["monthly_revenue"] = monthly_revenue
         stats["total_customers"] = total_customers
 
+        if "expiring_soon" in self._cards:
+            from utils.settings_helper import get_effective
+            try:
+                days = int(get_effective("business.expiry_alert_days", 30) or 30)
+            except (ValueError, TypeError):
+                days = 30
+            try:
+                stats["expiring_soon"] = len(models.get_expiring_items(days))
+            except (FileNotFoundError, OSError):
+                stats["expiring_soon"] = 0
+
         currency_keys = {"stock_value", "sales_today", "monthly_revenue",
                          "extra_income_today", "total_revenue", "total_pending"}
         for key, card in self._cards.items():
@@ -395,6 +467,7 @@ class DashboardPage(ttk.Frame):
         self._plot_payment_breakdown()
         self._plot_monthly_comparison()
         self._plot_stock_by_category()
+        self._plot_top_items()
 
         self._load_recent_sales()
         self._load_recent_preorders()
@@ -498,9 +571,120 @@ class DashboardPage(ttk.Frame):
         for name, amount, date, days in rows:
             tree.insert("", tk.END, values=(name, format_currency(amount), date, days))
 
+        def _selected_cid():
+            sel = tree.selection()
+            if not sel:
+                messagebox.showwarning("Send Reminder", "Select a customer row first.", parent=body)
+                return None
+            name_clicked = tree.item(sel[0], "values")[0]
+            for cid, info in pending_by_cust.items():
+                if cust_map.get(cid, f"Customer #{cid}") == name_clicked:
+                    return cid
+            return None
+
+        def _send_reminder():
+            cid = _selected_cid()
+            if cid is None:
+                return
+            try:
+                customer = models.get_customer(cid)
+                sales = models.get_sales()
+            except (FileNotFoundError, OSError):
+                messagebox.showerror("Send Reminder", "No data available", parent=body)
+                return
+            due_sales = [s for s in sales
+                         if s.get("Customer_ID") == cid and safe_float(s.get("Unpaid_Amount", 0)) > 0]
+            due_amount = pending_by_cust[cid]["total"]
+            import threading
+
+            def _run():
+                from utils import notifier
+                results = notifier.send_payment_reminder(customer, due_amount, due_sales)
+                def _done():
+                    any_ok = any(ok for _, ok, _ in results)
+                    for channel, ok, msg in results:
+                        try:
+                            app.toast.show(f"{channel.capitalize()}: {msg}",
+                                           "success" if ok else "warning", 5000)
+                        except Exception:
+                            pass
+                    if not any_ok:
+                        messagebox.showinfo("Send Reminder",
+                                            results[0][2] if results else "Nothing sent.",
+                                            parent=body)
+                self.after(0, _done)
+
+            threading.Thread(target=_run, daemon=True).start()
+
+        btn_row = tk.Frame(body, bg=CARD_BG)
+        btn_row.pack(anchor="w", pady=(8, 0))
+        ttk.Button(btn_row, text="✉  Send Payment Reminder (selected customer)",
+                   command=_send_reminder).pack(side=tk.LEFT)
+        tk.Label(btn_row, text="Uses the customer's Email/WhatsApp opt-in settings",
+                 font=(FONT_FAMILY, 9), bg=CARD_BG, fg=TEXT_MUTED).pack(side=tk.LEFT, padx=(10, 0))
+
         tk.Label(body, text=f"Total Pending: {format_currency(total_pending)}",
                  font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
                  bg=CARD_BG, fg=DANGER_COLOR).pack(anchor="w", pady=(8, 0))
+
+        btn_row = tk.Frame(body, bg=CARD_BG)
+        btn_row.pack(anchor="w", pady=(8, 0))
+        ttk.Button(btn_row, text="\u2709  Send Payment Reminder",
+                   command=_send_reminder).pack(side=tk.LEFT)
+        tk.Label(btn_row, text="Sends via the customer's opted-in channels "
+                               "(Email / WhatsApp — set in Customers page)",
+                 font=(FONT_FAMILY, 9), bg=CARD_BG,
+                 fg=TEXT_MUTED).pack(side=tk.LEFT, padx=(8, 0))
+
+    def _show_expiring_items(self):
+        """List stock items nearing (or past) their expiry date."""
+        from utils.settings_helper import get_effective
+        try:
+            days = int(get_effective("business.expiry_alert_days", 30) or 30)
+        except (ValueError, TypeError):
+            days = 30
+        try:
+            items = models.get_expiring_items(days)
+        except (FileNotFoundError, OSError):
+            items = []
+
+        app = self.winfo_toplevel()
+        body = app.show_modal(f"Expiring Stock (next {days} days)", width=720, height=460)
+
+        if not items:
+            tk.Label(body, text="\u2714  Nothing is expiring soon. You're all clear!",
+                     font=(FONT_FAMILY, FONT_SIZE_MD), bg=CARD_BG,
+                     fg=TEXT_SECONDARY).pack(pady=30)
+            return
+
+        cols = ("item", "batch", "expiry", "days_left", "qty")
+        tree = ttk.Treeview(body, columns=cols, show="headings", height=15)
+        tree.heading("item", text="Item")
+        tree.heading("batch", text="Batch")
+        tree.heading("expiry", text="Expiry Date")
+        tree.heading("days_left", text="Days Left")
+        tree.heading("qty", text="Qty In Stock")
+        tree.column("item", width=220, anchor="w")
+        tree.column("batch", width=110, anchor="w")
+        tree.column("expiry", width=110, anchor="center")
+        tree.column("days_left", width=90, anchor="e")
+        tree.column("qty", width=90, anchor="e")
+        scroll = ttk.Scrollbar(body, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for it in items:
+            left = it.get("days_to_expiry", 0)
+            tree.insert("", tk.END, values=(
+                it.get("Item_Name", ""),
+                str(it.get("Batch_No", "") or ""),
+                str(it.get("Expiry_Date", "") or "")[:10],
+                ("EXPIRED" if left < 0 else left),
+                it.get("Quantity", 0),
+            ), tags=("expired" if left < 0 else "soon"))
+        tree.tag_configure("expired", foreground="#DC2626")
+        tree.tag_configure("soon", foreground="#B45309")
 
     def _show_all_items(self):
         try:

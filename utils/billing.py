@@ -95,6 +95,17 @@ def _render_html(sale_data):
         <tr><td>Paid</td><td class="amt">{format_currency(paid_amt)}</td</tr>
         <tr><td>Balance</td><td class="amt">{format_currency(unpaid_amt)}</td</tr>"""
 
+    cupi = company.get("upi_id") or ""
+    cpay_note = company.get("payment_instructions") or ""
+    pay_lines = ""
+    if cupi:
+        pay_lines += (f'<div style="font-size:13px;color:#1e293b;margin-bottom:6px;">'
+                      f'Pay via UPI: <b>{eh(cupi)}</b> &nbsp;·&nbsp; Amount: '
+                      f'{format_currency(grand_total)}</div>')
+    if cpay_note:
+        pay_lines += (f'<div style="font-size:13px;color:#1e293b;margin-bottom:6px;">'
+                      f'Payment: <b>{eh(cpay_note)}</b></div>')
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -203,6 +214,7 @@ def _render_html(sale_data):
   </div>
 
   <div class="footer">
+    {pay_lines}
     <div class="note">{eh(note)}</div>
     <div style="font-size:11px;color:#94a3b8;margin-top:6px;">This is a computer-generated invoice</div>
   </div>

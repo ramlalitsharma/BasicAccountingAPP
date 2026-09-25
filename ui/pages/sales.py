@@ -1,4 +1,5 @@
 import tkinter as tk
+import os
 from datetime import datetime
 from tkinter import ttk, messagebox
 from database import models
@@ -15,6 +16,7 @@ from config import FONT_FAMILY, BG_COLOR, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY,
 class SalesPage(ttk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
+        self._app = self.winfo_toplevel()
         self._build_ui()
 
     def _build_ui(self):
@@ -66,13 +68,18 @@ class SalesPage(ttk.Frame):
         payment_btn.pack(side=tk.RIGHT, padx=(5, 0))
         ToolTip(payment_btn, "Update payment status for selected sale")
 
+        remind_btn = ttk.Button(toolbar, text="\u2709  Remind",
+                                command=self._send_reminder)
+        remind_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(remind_btn, "Send a payment reminder to the customer of the selected sale")
+
         return_btn = ttk.Button(toolbar, text="Return Sale",
                                 command=self._return_sale)
         return_btn.pack(side=tk.RIGHT, padx=(5, 0))
         ToolTip(return_btn, "Return sale and restore stock")
 
         delete_btn = ttk.Button(toolbar, text="Delete",
-                                command=self._delete_sale)
+                                command=self._delete_sale, style="Danger.TButton")
         delete_btn.pack(side=tk.RIGHT, padx=(5, 0))
         ToolTip(delete_btn, "Delete selected sale (stock NOT restored)")
 
@@ -80,6 +87,16 @@ class SalesPage(ttk.Frame):
                                command=self._print_bill)
         print_btn.pack(side=tk.RIGHT, padx=(5, 0))
         ToolTip(print_btn, "Print invoice/bill for selected sale")
+
+        pdf_btn = ttk.Button(toolbar, text="Invoice PDF",
+                             command=self._invoice_pdf)
+        pdf_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(pdf_btn, "Save a professional PDF invoice for the selected sale")
+
+        email_btn = ttk.Button(toolbar, text="\u2709  Email Invoice",
+                               command=self._email_invoice)
+        email_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        ToolTip(email_btn, "Email the PDF invoice to the customer (needs opt-in + SMTP setup)")
 
         export_btn = ttk.Button(toolbar, text="Export CSV",
                                 command=self._export)
@@ -298,6 +315,14 @@ class SalesPage(ttk.Frame):
         qty_entry = ttk.Entry(body, width=35)
         qty_entry.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 
+        # Weight-based pricing (kirana/grocery): enter grams -> qty in units.
+        weight_entry = None
+        if is_feature_enabled("weight_pricing"):
+            ttk.Label(body, text="Weight (g)").grid(row=2, column=2, padx=(6, 2),
+                                                    pady=10, sticky="w")
+            weight_entry = ttk.Entry(body, width=10)
+            weight_entry.grid(row=2, column=3, padx=(0, 6), pady=10, sticky="w")
+
         ttk.Label(body, text="Selling Price").grid(row=3, column=0, padx=10,
                                                    pady=10, sticky="w")
         price_entry = ttk.Entry(body, width=35)
@@ -332,6 +357,15 @@ class SalesPage(ttk.Frame):
         unpaid_entry.grid(row=7, column=1, padx=10, pady=10, sticky="ew")
 
         def auto_calc(*args):
+            # Weight-based pricing: grams typed -> qty auto-computed in units
+            if weight_entry is not None and weight_entry.get().strip():
+                try:
+                    g = float(weight_entry.get())
+                    if g > 0:
+                        qty_entry.delete(0, tk.END)
+                        qty_entry.insert(0, f"{round(g / 1000, 3):g}")
+                except (ValueError, TypeError):
+                    pass
             try:
                 q = float(qty_entry.get() or 0)
                 p = float(price_entry.get() or 0)
@@ -361,6 +395,8 @@ class SalesPage(ttk.Frame):
         price_entry.bind("<KeyRelease>", auto_calc)
         payment_combo.bind("<<ComboboxSelected>>", on_payment_change)
         paid_var.trace_add("write", lambda *args: auto_calc())
+        if weight_entry is not None:
+            weight_entry.bind("<KeyRelease>", auto_calc)
 
         def record():
             selection = item_var.get()
@@ -368,7 +404,7 @@ class SalesPage(ttk.Frame):
                 messagebox.showerror("Error", "Select a valid item")
                 return
             try:
-                qty = int(qty_entry.get().strip())
+                qty = float(qty_entry.get().strip())
             except (ValueError, TypeError):
                 messagebox.showerror("Input Error", "Please enter a valid number for Quantity.")
                 return
@@ -382,6 +418,22 @@ class SalesPage(ttk.Frame):
                 return
             
             customer_id = customer_map.get(customer_var.get())
+
+            # Drug schedule verification (pharmacy): H/H1/X items need a
+            # prescription check before the sale is recorded.
+            if is_feature_enabled("schedule_tracking"):
+                try:
+                    _item = models.get_stock_item(item_map[selection])
+                    _sched = str((_item or {}).get("Drug_Schedule", "")).strip().upper()
+                    if _sched in ("H", "H1", "X"):
+                        if not messagebox.askyesno(
+                                f"Schedule {_sched} Item",
+                                f"{selection.split(' (Qty:')[0]} is a Schedule {_sched} drug.\n\n"
+                                "Dispense only after verifying the prescription. Continue?"):
+                            return
+                except (FileNotFoundError, OSError):
+                    pass
+
             payment_status = payment_var.get()
             try:
                 paid_amount = float(paid_var.get().strip() or 0) if payment_status == "partial" else None
@@ -389,6 +441,28 @@ class SalesPage(ttk.Frame):
             except (ValueError, TypeError):
                 messagebox.showerror("Input Error", "Please enter a valid number for payment amount.")
                 return
+
+            # Soft credit-limit check (customer with a configured limit)
+            if customer_id:
+                try:
+                    _cust = models.get_customer(customer_id)
+                    _limit = safe_float((_cust or {}).get("Credit_Limit", 0))
+                    if _limit > 0:
+                        _total = qty * price
+                        _this_unpaid = (0.0 if payment_status == "paid"
+                                        else _total if payment_status == "unpaid"
+                                        else (unpaid_amount if unpaid_amount is not None
+                                              else max(0.0, _total - (paid_amount or 0))))
+                        _new_due = models.get_customer_due(customer_id) + _this_unpaid
+                        if _new_due > _limit:
+                            if not messagebox.askyesno(
+                                    "Credit Limit Exceeded",
+                                    f"This sale takes {customer_var.get().split(' (')[0]}'s outstanding "
+                                    f"to {_new_due:,.2f}, over the credit limit of {_limit:,.2f}.\n\n"
+                                    "Record the sale anyway?"):
+                                return
+                except (FileNotFoundError, OSError, ValueError):
+                    pass
             
             try:
                 sale_id, receipt_no = models.record_sale(item_map[selection], qty, price, 
@@ -404,6 +478,25 @@ class SalesPage(ttk.Frame):
                 return
             app.close_modal()
             self.refresh()
+            total_amt = qty * price
+            if payment_status == "paid":
+                s_paid, s_unpaid = total_amt, 0.0
+            elif payment_status == "unpaid":
+                s_paid, s_unpaid = 0.0, total_amt
+            else:
+                s_paid = paid_amount or 0.0
+                s_unpaid = unpaid_amount if unpaid_amount is not None else max(0.0, total_amt - s_paid)
+            self._maybe_notify_sale(customer_id, {
+                "receipt_no": receipt_no,
+                "item_name": selection.split(" (Qty:")[0],
+                "quantity_sold": qty,
+                "price": price,
+                "total": total_amt,
+                "payment_status": payment_status,
+                "paid_amount": s_paid,
+                "unpaid_amount": s_unpaid,
+                "sale_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            })
             if messagebox.askyesno("Invoice", f"Sale recorded (Receipt: {receipt_no}). Generate invoice?"):
                 sale_data = {
                     "id": sale_id,
@@ -425,6 +518,49 @@ class SalesPage(ttk.Frame):
         ttk.Button(body, text="Record Sale", command=record).grid(
             row=8, column=0, columnspan=2, pady=15)
         body.grid_columnconfigure(1, weight=1)
+
+    def _maybe_notify_sale(self, customer_id, sale_data):
+        """Fire post-sale email/WhatsApp notifications per settings + customer
+        opt-in. Fully non-blocking (daemon thread), silent no-op when the
+        feature is off, unconfigured, or the customer hasn't opted in."""
+        try:
+            if not customer_id:
+                return
+            from utils import notifier
+            from utils.license import license_mgr
+            customer = models.get_customer(customer_id)
+            if not customer:
+                return
+            opted_email = str(customer.get("Notify_Email", "")).strip().lower() in ("yes", "true", "1")
+            opted_wa = str(customer.get("Notify_WhatsApp", "")).strip().lower() in ("yes", "true", "1")
+            portal_on = str(customer.get("Portal_Enabled", "")).strip().lower() in ("yes", "true", "1")
+            if not (opted_email or opted_wa or portal_on):
+                return
+            notify_ok = (notifier.notifications_enabled()
+                         and license_mgr.has_feature("sale_notifications"))
+            import threading
+
+            def _run():
+                results = notifier.notify_after_sale(customer, sale_data) if notify_ok else []
+                try:
+                    from utils import portal
+                    portal.sync_after_sale(customer)
+                except Exception:
+                    pass
+                if not results:
+                    return
+                def _done():
+                    for channel, ok, msg in results:
+                        try:
+                            self._app.toast.show(f"{channel.capitalize()}: {msg}",
+                                                 "success" if ok else "warning", 4500)
+                        except Exception:
+                            pass
+                self.after(0, _done)
+
+            threading.Thread(target=_run, daemon=True).start()
+        except Exception:
+            pass
 
     def _return_sale(self):
         sel = self.table.get_selected_row()
@@ -459,6 +595,42 @@ class SalesPage(ttk.Frame):
                 messagebox.showerror("Error", str(e))
                 return
             self.refresh()
+
+    def _send_reminder(self):
+        """Send a payment reminder for the selected unpaid/partial sale."""
+        sale = self._selected_sale()
+        if not sale:
+            messagebox.showwarning("Send Reminder", "Select a sale row first.")
+            return
+        due = safe_float(sale.get("Unpaid_Amount", 0))
+        if due <= 0:
+            messagebox.showinfo("Send Reminder", "This sale is fully paid — nothing to remind.")
+            return
+        customer_id = sale.get("Customer_ID")
+        if not customer_id:
+            messagebox.showinfo("Send Reminder",
+                                "This is a walk-in sale with no customer attached.")
+            return
+        customer = models.get_customer(customer_id)
+        import threading
+
+        def _run():
+            from utils import notifier
+            results = notifier.send_payment_reminder(customer, due, [sale])
+            def _done():
+                any_ok = any(ok for _, ok, _ in results)
+                for channel, ok, msg in results:
+                    try:
+                        self._app.toast.show(f"{channel.capitalize()}: {msg}",
+                                             "success" if ok else "warning", 5000)
+                    except Exception:
+                        pass
+                if not any_ok:
+                    messagebox.showinfo("Send Reminder",
+                                        results[0][2] if results else "Nothing sent.")
+            self.after(0, _done)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _update_payment(self):
         sel = self.table.get_selected_row()
@@ -539,6 +711,146 @@ class SalesPage(ttk.Frame):
         
         ttk.Button(body, text="Update", command=save).grid(row=5, column=0, columnspan=2, pady=15)
         body.grid_columnconfigure(1, weight=1)
+
+    def _selected_sale(self):
+        """Full stored record for the currently selected table row."""
+        sel = self.table.get_selected_row()
+        if not sel:
+            return None
+        sale_id = sel["key"]
+        try:
+            return next((s for s in models.get_sales() if s.get("ID") == sale_id), None)
+        except (FileNotFoundError, OSError):
+            return None
+
+    @staticmethod
+    def _sale_to_invoice_data(sale):
+        sid = sale.get("ID", 0)
+        invoice = models.format_invoice_id(sid) if hasattr(models, "format_invoice_id") else f"#{sid}"
+        total = safe_float(sale.get("Total", 0))
+        return {
+            "id": sid,
+            "invoice_id": invoice,
+            "receipt_no": sale.get("Receipt_No", ""),
+            "item_name": sale.get("item_name", ""),
+            "category": sale.get("category", ""),
+            "quantity_sold": sale.get("Quantity_Sold", 0),
+            "price": safe_float(sale.get("Price", 0)),
+            "total": total,
+            "payment_status": sale.get("Payment_Status", "paid"),
+            "paid_amount": safe_float(sale.get("Paid_Amount", total)),
+            "unpaid_amount": safe_float(sale.get("Unpaid_Amount", 0)),
+            "customer_name": sale.get("customer_name", "Walk-in Customer"),
+            "sale_date": sale.get("Sale_Date", ""),
+        }
+
+    def _invoice_pdf(self):
+        sale = self._selected_sale()
+        if not sale:
+            messagebox.showwarning("Invoice PDF", "Select a sale first.")
+            return
+        from utils.pdf_export import export_sale_invoice, HAVE_REPORTLAB
+        if not HAVE_REPORTLAB:
+            messagebox.showwarning("Invoice PDF",
+                                   "ReportLab is not installed. Run: pip install reportlab")
+            return
+        sale_data = self._sale_to_invoice_data(sale)
+        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(sale_data["invoice_id"]))
+        from tkinter import filedialog
+        path = filedialog.asksaveasfilename(
+            title="Save Invoice PDF",
+            defaultextension=".pdf",
+            initialfile=f"invoice_{safe_id}.pdf",
+            filetypes=[("PDF files", "*.pdf")])
+        if not path:
+            return
+        ok, msg = export_sale_invoice(sale_data, path)
+        if ok:
+            try:
+                os.startfile(path)
+            except OSError:
+                pass
+            try:
+                self._app.toast.show("Invoice PDF saved", "success", 3000)
+            except Exception:
+                pass
+        else:
+            messagebox.showerror("Invoice PDF", msg)
+
+    def _email_invoice(self):
+        """Generate the invoice PDF and email it to the sale's customer."""
+        sale = self._selected_sale()
+        if not sale:
+            messagebox.showwarning("Email Invoice", "Select a sale first.")
+            return
+        customer_id = sale.get("Customer_ID")
+        if not customer_id:
+            messagebox.showinfo("Email Invoice", "Walk-in sale — no customer email on file.")
+            return
+        customer = models.get_customer(customer_id)
+        if not customer:
+            messagebox.showinfo("Email Invoice", "Customer record not found.")
+            return
+        to_email = str(customer.get("Email", "") or "").strip()
+        if not to_email:
+            messagebox.showinfo("Email Invoice",
+                                "Customer has no email address. Edit the customer first.")
+            return
+        if str(customer.get("Notify_Email", "")).strip().lower() not in ("yes", "true", "1"):
+            messagebox.showinfo("Email Invoice",
+                                "Customer has not opted in to email notifications.")
+            return
+        from utils import notifier
+        if not notifier.is_email_configured():
+            messagebox.showinfo("Email Invoice",
+                                "SMTP is not configured. Go to Settings → Notifications first.")
+            return
+        from utils.feature_gate import require_feature
+        if not require_feature("email_invoicing", parent=self, friendly_name="Email Invoices"):
+            return
+        from utils.pdf_export import export_sale_invoice, HAVE_REPORTLAB
+        if not HAVE_REPORTLAB:
+            messagebox.showwarning("Email Invoice",
+                                   "ReportLab is not installed. Run: pip install reportlab")
+            return
+
+        sale_data = self._sale_to_invoice_data(sale)
+        customer_name = str(customer.get("Name", "") or "")
+        import threading
+
+        def _run():
+            import tempfile
+            pdf_path = os.path.join(tempfile.gettempdir(),
+                                    f"invoice_{sale_data['id']}_{datetime.now():%Y%m%d%H%M%S}.pdf")
+            ok, msg = export_sale_invoice(sale_data, pdf_path)
+            if ok:
+                body = notifier.build_sale_receipt_text(sale_data, customer_name)
+                ok, msg = notifier.send_email_gated(
+                    feature_id="email_invoicing",
+                    to_email=to_email,
+                    subject=f"Invoice {sale_data.get('invoice_id', '')} — {customer_name or 'Sale'}",
+                    body_text=body + "\n\n(Full invoice attached as PDF.)",
+                    attachment_path=pdf_path,
+                    attachment_filename=f"invoice_{sale_data.get('receipt_no', sale_data['id'])}.pdf",
+                )
+            try:
+                os.remove(pdf_path)
+            except OSError:
+                pass
+            def _done():
+                try:
+                    self._app.toast.show(msg, "success" if ok else "error", 5000)
+                except Exception:
+                    pass
+                if not ok:
+                    messagebox.showerror("Email Invoice", msg)
+            self.after(0, _done)
+
+        threading.Thread(target=_run, daemon=True).start()
+        try:
+            self._app.toast.show("Sending invoice email…", "info", 2500)
+        except Exception:
+            pass
 
     def _print_bill(self):
         sel = self.table.get_selected_row()

@@ -46,6 +46,9 @@ DEFAULT_TIER_FEATURES = {
         "email_invoicing": False,
         "advanced_reports": False,
         "multi_company": False,
+        "customer_notifications": False,
+        "purchase_notifications": False,
+        "sale_notifications": False,
     },
     "basic": {
         "whatsapp_invoice": False,
@@ -53,6 +56,9 @@ DEFAULT_TIER_FEATURES = {
         "email_invoicing": False,
         "advanced_reports": False,
         "multi_company": False,
+        "customer_notifications": False,
+        "purchase_notifications": False,
+        "sale_notifications": False,
     },
     "pro": {
         "whatsapp_invoice": True,
@@ -60,6 +66,9 @@ DEFAULT_TIER_FEATURES = {
         "email_invoicing": True,
         "advanced_reports": True,
         "multi_company": False,
+        "customer_notifications": True,
+        "purchase_notifications": True,
+        "sale_notifications": True,
     },
     "enterprise": {
         "whatsapp_invoice": True,
@@ -67,6 +76,9 @@ DEFAULT_TIER_FEATURES = {
         "email_invoicing": True,
         "advanced_reports": True,
         "multi_company": True,
+        "customer_notifications": True,
+        "purchase_notifications": True,
+        "sale_notifications": True,
     },
 }
 

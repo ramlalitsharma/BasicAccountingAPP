@@ -12,7 +12,36 @@ from config import FONT_FAMILY, BG_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, FONT_SIZ
 class StockPage(ttk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
+        from utils.settings_helper import get_active_stock_field_defs
+        self._field_defs = get_active_stock_field_defs()
+        self._extra_table_cols = [d for _, d in self._field_defs][:4]
         self._build_ui()
+
+    def _render_extra_fields(self, body, start_row, values=None):
+        """Render the active vertical's extra stock fields into a form.
+        Returns ``(next_row, {column: StringVar})``."""
+        vars_map = {}
+        row = start_row
+        for _key, d in self._field_defs:
+            ttk.Label(body, text=d["label"]).grid(row=row, column=0, padx=10,
+                                                  pady=8, sticky="w")
+            cur = str(values.get(d["column"], "") or "") if values else ""
+            var = tk.StringVar(value=cur)
+            if d["kind"] == "choice":
+                w = ttk.Combobox(body, textvariable=var, values=d.get("choices", []),
+                                 state="readonly", width=37)
+            else:
+                w = ttk.Entry(body, textvariable=var, width=38)
+            w.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+            vars_map[d["column"]] = var
+            row += 1
+        return row, vars_map
+
+    @staticmethod
+    def _collect_extras(vars_map):
+        """Extras dict for add/update_stock_item — all rendered columns are
+        written (including blanks, so edits can clear a value)."""
+        return {col: var.get().strip() for col, var in vars_map.items()}
 
     def _build_ui(self):
         header = ttk.Label(self, text="Stock Inventory",
@@ -45,7 +74,7 @@ class StockPage(ttk.Frame):
         ToolTip(edit_btn, "Edit selected stock item")
 
         delete_btn = ttk.Button(toolbar, text="Delete",
-                                command=self._delete)
+                                command=self._delete, style="Danger.TButton")
         delete_btn.pack(side=tk.RIGHT, padx=(5, 0))
         ToolTip(delete_btn, "Delete selected stock item")
 
@@ -82,8 +111,10 @@ class StockPage(ttk.Frame):
                  font=(FONT_FAMILY, FONT_SIZE_MD), bg=BG_COLOR, fg=TEXT_SECONDARY).pack()
 
         cols = {"Item": 180, "Category": 130, "Qty": 70, "Min": 65,
-                "Cost": 95, "Price": 95, "Margin": 85, "Supplier": 160}
+                "Cost": 95, "Price": 95, "Margin": 85, "Supplier": 130}
         aligns = {"Qty": "e", "Min": "e", "Cost": "e", "Price": "e", "Margin": "e"}
+        for d in self._extra_table_cols:
+            cols[d["label"]] = 110
         self.table = Table(self._container, columns=cols, key_column="ID",
                            on_double_click=self._edit_form, alignments=aligns)
 
@@ -104,7 +135,7 @@ class StockPage(ttk.Frame):
             margin = ((price - cost) / cost * 100) if cost > 0 else 0
             qty = safe_float(r.get("Quantity", 0))
             min_q = safe_float(r.get("Min_Quantity", 0))
-            display.append({
+            display_row = {
                 "ID": r.get("ID"),
                 "Item": r.get("Item_Name", ""),
                 "Category": r.get("Category", ""),
@@ -116,7 +147,10 @@ class StockPage(ttk.Frame):
                 "Supplier": r.get("supplier_name", ""),
                 "Quantity": qty,
                 "Min_Quantity": min_q,
-            })
+            }
+            for d in self._extra_table_cols:
+                display_row[d["label"]] = str(r.get(d["column"], "") or "")
+            display.append(display_row)
         self.table.populate(display)
         self._refresh_categories()
         self._update_alert_count()
@@ -142,7 +176,8 @@ class StockPage(ttk.Frame):
 
     def _add_form(self):
         app = self.winfo_toplevel()
-        body = app.show_modal("Add Stock Item", width=520, height=560)
+        body = app.show_modal("Add Stock Item", width=520,
+                              height=min(560 + 46 * len(self._field_defs), 780))
 
         try:
             existing_items = models.get_stock_items()
@@ -209,11 +244,17 @@ class StockPage(ttk.Frame):
                                        values=[""] + list(supplier_names.keys()),
                                        state="normal", width=38)
         supplier_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+        row += 1
+        row, extra_vars = self._render_extra_fields(body, row)
 
         def save():
             name = fields["item_name"].get().strip()
             if not name:
                 messagebox.showerror("Error", "Item Name is required")
+                return
+            # ── Feature gate: stock item limit per license tier ──
+            from utils.feature_gate import require_stock_slot
+            if not require_stock_slot(parent=body):
                 return
             try:
                 qty = int(fields["quantity"].get().strip() or 0)
@@ -243,6 +284,7 @@ class StockPage(ttk.Frame):
                     qty, purchase_price, selling_price,
                     min_qty,
                     supplier_id,
+                    extras=self._collect_extras(extra_vars),
                 )
             except PermissionError as e:
                 messagebox.showerror("Update Required", str(e))
@@ -254,7 +296,7 @@ class StockPage(ttk.Frame):
             self.refresh()
             messagebox.showinfo("Success", "Item added")
 
-        save_row = row + 1
+        save_row = row
         ttk.Button(body, text="Save", command=save).grid(
             row=save_row, column=0, columnspan=2, pady=(20, 10))
         body.grid_columnconfigure(1, weight=1)
@@ -269,7 +311,8 @@ class StockPage(ttk.Frame):
             return
 
         app = self.winfo_toplevel()
-        body = app.show_modal("Edit Stock Item", width=520, height=560)
+        body = app.show_modal("Edit Stock Item", width=520,
+                              height=min(560 + 46 * len(self._field_defs), 780))
 
         try:
             existing_items = models.get_stock_items()
@@ -337,6 +380,8 @@ class StockPage(ttk.Frame):
         supplier_combo.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
         if item.get("supplier_name"):
             supplier_var.set(item["supplier_name"])
+        row += 1
+        row, extra_vars = self._render_extra_fields(body, row, values=item)
 
         def save():
             name = fields["Item_Name"].get().strip()
@@ -370,6 +415,7 @@ class StockPage(ttk.Frame):
                     item_id, name, fields["Category"].get().strip(),
                     qty, min_qty, purchase_price, selling_price,
                     supplier_id,
+                    extras=self._collect_extras(extra_vars),
                 )
             except PermissionError as e:
                 messagebox.showerror("Update Required", str(e))
@@ -382,7 +428,7 @@ class StockPage(ttk.Frame):
             messagebox.showinfo("Success", "Item updated")
 
         ttk.Button(body, text="Update", command=save).grid(
-            row=row + 1, column=0, columnspan=2, pady=(20, 10))
+            row=row, column=0, columnspan=2, pady=(20, 10))
         body.grid_columnconfigure(1, weight=1)
 
     def _delete(self):
@@ -412,6 +458,31 @@ class StockPage(ttk.Frame):
                 reader = csv.DictReader(f)
                 count = 0
                 errors = []
+                # First, count incoming rows so we can enforce the stock cap
+                # once before any partial-import damage.
+                rows = list(reader)
+                from utils.feature_gate import max_stock_items, current_stock_count
+                cap = max_stock_items()
+                cur = current_stock_count()
+                slot_left = max(0, cap - cur)
+                if slot_left <= 0:
+                    messagebox.showwarning(
+                        "Stock limit reached",
+                        f"You already have {cur}/{cap} stock items.\n"
+                        f"Upgrade your license in Settings → License to add more.",
+                    )
+                    return
+                if len(rows) > slot_left:
+                    if not messagebox.askyesno(
+                        "Stock limit will be reached",
+                        f"Importing {len(rows)} items but you only have "
+                        f"{slot_left} slot(s) left under the current plan "
+                        f"(cap {cap}). Only the first {slot_left} items will be "
+                        f"imported. Continue?",
+                    ):
+                        return
+                    rows = rows[:slot_left]
+                reader = iter(rows)
                 for i, row in enumerate(reader, start=2):
                     try:
                         qty = int(row.get("Quantity", 0))

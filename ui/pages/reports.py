@@ -24,7 +24,8 @@ class ReportsPage(ttk.Frame):
 
         self.tab_var = tk.StringVar(value="sales")
         tabs = [("Sales Report", "sales"), ("Purchases Report", "purchases"),
-                ("Combined Report", "combined")]
+                ("Combined Report", "combined"), ("P&L Summary", "pnl"),
+                ("Tax Summary", "tax"), ("Top Items", "top")]
         for txt, val in tabs:
             rb = ttk.Radiobutton(tab_frame, text=txt, variable=self.tab_var,
                                   value=val, command=self._load)
@@ -171,6 +172,178 @@ class ReportsPage(ttk.Frame):
             return models.get_suppliers()
         except FileNotFoundError:
             return []
+
+    # ---------- new tab loaders (P&L / Tax / Top Items) ----------
+
+    def _pnl_rows(self, year):
+        """Monthly P&L rows for a year: [Month, Revenue, COGS, Gross Profit,
+        Extra Income, Net Profit] + a TOTAL row. Returns list of lists."""
+        data = self._safe_get_yearly_report(year)
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        rows = []
+        t_rev = t_cogs = t_extra = 0.0
+        for r in data:
+            rev = safe_float(r.get("total_revenue", 0))
+            profit = safe_float(r.get("total_profit", 0))
+            cogs = round(rev - profit, 2)
+            extra = safe_float(r.get("extra_income", 0))
+            net = round(profit + extra, 2)
+            rows.append([months[int(r["month"]) - 1], format_currency(rev),
+                         format_currency(cogs), format_currency(profit),
+                         format_currency(extra), format_currency(net)])
+            t_rev += rev
+            t_cogs += cogs
+            t_extra += extra
+        rows.append(["TOTAL", format_currency(t_rev), format_currency(t_cogs),
+                     format_currency(round(t_rev - t_cogs, 2)),
+                     format_currency(t_extra),
+                     format_currency(round(t_rev - t_cogs + t_extra, 2))])
+        return rows
+
+    def _load_pnl_data(self):
+        year = self._get_year()
+        if year is None:
+            return
+        cols = ["Month", "Revenue", "COGS", "Gross Profit", "Extra Income", "Net Profit"]
+        self._set_tree_columns(cols, first_wide=True)
+        rows = self._pnl_rows(year)
+        for i, row in enumerate(rows):
+            tag = "total" if i == len(rows) - 1 else ""
+            self.tree.insert("", tk.END, values=row, tags=(tag,))
+        self.tree.tag_configure("total", background="#EFF6FF")
+        ttk.Label(self.summary_frame,
+                  text=f"Profit & Loss — {year}").pack(side=tk.LEFT, padx=(0, 15))
+        if rows:
+            ttk.Label(self.summary_frame,
+                      text=f"Net Profit (Year): {rows[-1][-1]}").pack(side=tk.LEFT, padx=(0, 10))
+
+    def _tax_rows(self, year):
+        """Monthly tax estimate rows: [Month, Sales, Taxable, <tax components…>, Total Tax]."""
+        from utils.tax import get_tax_engine, is_tax_enabled, get_default_rate
+        from utils.settings_helper import get_current_country
+        engine = get_tax_engine()
+        rate = safe_float(get_default_rate())
+        country = get_current_country()
+        sales = [s for s in self._safe_get_sales()
+                 if (s.get("Sale_Date") or "").startswith(str(year))]
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        per_month = {}
+        for s in sales:
+            sd = str(s.get("Sale_Date") or "")
+            m = sd[5:7]
+            if m not in per_month:
+                per_month[m] = {"count": 0, "taxable": 0.0}
+            per_month[m]["count"] += 1
+            per_month[m]["taxable"] += safe_float(s.get("Total", 0))
+
+        enabled = is_tax_enabled() and rate > 0
+        if enabled:
+            sample = engine.compute_tax_breakdown(subtotal=100.0, rate_percent=rate)
+            comp_labels = [c["label"] for c in sample["components"]]
+        else:
+            comp_labels = []
+
+        cols = ["Month", "Sales", "Taxable Sales"] + comp_labels + ["Total Tax"]
+        rows = []
+        totals = {"count": 0, "taxable": 0.0, "comp": {l: 0.0 for l in comp_labels}, "tax": 0.0}
+        for m in sorted(per_month):
+            info = per_month[m]
+            taxable = round(info["taxable"], 2)
+            if enabled and taxable > 0:
+                bd = engine.compute_tax_breakdown(subtotal=taxable, rate_percent=rate)
+                comp_vals = [round(c["amount"], 2) for c in bd["components"]]
+                tax_total = round(bd["tax_amount"], 2)
+            else:
+                comp_vals = [0.0 for _ in comp_labels]
+                tax_total = 0.0
+            rows.append([months[int(m) - 1], info["count"], format_currency(taxable)]
+                        + [format_currency(v) for v in comp_vals]
+                        + [format_currency(tax_total)])
+            totals["count"] += info["count"]
+            totals["taxable"] += taxable
+            totals["tax"] += tax_total
+            for l, v in zip(comp_labels, comp_vals):
+                totals["comp"][l] += v
+        if rows:
+            rows.append(["TOTAL", totals["count"], format_currency(round(totals["taxable"], 2))]
+                        + [format_currency(round(v, 2)) for v in totals["comp"].values()]
+                        + [format_currency(round(totals["tax"], 2))])
+        return cols, rows, rate, country, enabled
+
+    def _load_tax_data(self):
+        year = self._get_year()
+        if year is None:
+            return
+        cols, rows, rate, country, enabled = self._tax_rows(year)
+        self._set_tree_columns(cols, first_wide=True)
+        for i, row in enumerate(rows):
+            tag = "total" if i == len(rows) - 1 else ""
+            self.tree.insert("", tk.END, values=row, tags=(tag,))
+        self.tree.tag_configure("total", background="#EFF6FF")
+        if not enabled:
+            ttk.Label(self.summary_frame,
+                      text="Tax is disabled or rate is 0 — enable it in Settings → Tax.").pack(side=tk.LEFT)
+        else:
+            ttk.Label(self.summary_frame,
+                      text=f"Estimated {country} tax on sales @ {rate:g}% — {year}").pack(side=tk.LEFT, padx=(0, 15))
+            if rows:
+                ttk.Label(self.summary_frame,
+                          text=f"Total Tax (Year): {rows[-1][-1]}").pack(side=tk.LEFT, padx=(0, 10))
+
+    def _top_items_rows(self):
+        """Item performance rows: [Rank, Item, Category, Qty, Revenue, Profit, % Rev]."""
+        sales = self._safe_get_sales()
+        stock = {r["ID"]: r for r in self._safe_get_stock_items()}
+        agg = {}
+        for s in sales:
+            item = stock.get(s.get("Stock_ID"), {})
+            name = item.get("Item_Name", "Unknown")
+            if name not in agg:
+                agg[name] = {"item": name, "category": item.get("Category", ""),
+                             "qty": 0.0, "revenue": 0.0, "cost": 0.0}
+            qty = safe_float(s.get("Quantity_Sold", 0))
+            agg[name]["qty"] += qty
+            agg[name]["revenue"] += safe_float(s.get("Total", 0))
+            agg[name]["cost"] += qty * safe_float(item.get("Purchase_Price", 0))
+        total_rev = sum(a["revenue"] for a in agg.values())
+        rows = []
+        for rank, a in enumerate(sorted(agg.values(), key=lambda x: x["revenue"], reverse=True), 1):
+            profit = round(a["revenue"] - a["cost"], 2)
+            pct = (a["revenue"] / total_rev * 100) if total_rev > 0 else 0
+            rows.append([rank, a["item"], a["category"], int(a["qty"]),
+                         format_currency(a["revenue"]), format_currency(profit),
+                         f"{pct:.1f}%"])
+        return rows
+
+    def _load_top_items(self):
+        cols = ["#", "Item", "Category", "Qty Sold", "Revenue", "Profit", "% of Revenue"]
+        self._set_tree_columns(cols, first_wide=True)
+        self.tree.column("#", width=40, anchor="center")
+        rows = self._top_items_rows()
+        for row in rows:
+            self.tree.insert("", tk.END, values=row)
+        if rows:
+            ttk.Label(self.summary_frame,
+                      text=f"Top seller: {rows[0][1]} ({rows[0][4]})").pack(side=tk.LEFT, padx=(0, 15))
+            ttk.Label(self.summary_frame,
+                      text=f"{len(rows)} items sold (all time)").pack(side=tk.LEFT)
+
+    def _get_year(self):
+        try:
+            return int(self.year_var.get().strip())
+        except (ValueError, TypeError):
+            messagebox.showerror("Input Error", "Please enter a valid year.")
+            return None
+
+    def _set_tree_columns(self, cols, first_wide=False):
+        self.tree["columns"] = cols
+        for c in cols:
+            self.tree.heading(c, text=c)
+            self.tree.column(c, width=110, anchor="center")
+        if first_wide and cols:
+            self.tree.column(cols[0], width=80, anchor="w")
 
     def _load_sales_data(self):
         view = self.view_var.get()
@@ -407,6 +580,27 @@ class ReportsPage(ttk.Frame):
         self.tree.column("Item", width=180, anchor="w")
 
         tab = self.tab_var.get()
+
+        if tab in ("pnl", "tax", "top"):
+            # Year-scoped reports — only show the year selector.
+            self.date_combo.pack_forget()
+            self.month_combo.pack_forget()
+            self.year_combo.pack(side=tk.LEFT, padx=(0, 10))
+            if tab == "pnl":
+                self._load_pnl_data()
+            elif tab == "tax":
+                self._load_tax_data()
+            else:
+                self._load_top_items()
+            items = self.tree.get_children()
+            if not items:
+                self._tree_container.pack_forget()
+                self._empty_state.pack(fill=tk.BOTH, expand=True)
+            else:
+                self._empty_state.pack_forget()
+                self._tree_container.pack(fill=tk.BOTH, expand=True)
+            return
+
         if tab == "sales":
             self._load_sales_data()
         elif tab == "purchases":
@@ -425,6 +619,21 @@ class ReportsPage(ttk.Frame):
     def _export(self):
         tab = self.tab_var.get()
         view = self.view_var.get()
+
+        if tab in ("pnl", "tax", "top"):
+            year = self._get_year()
+            if year is None:
+                return
+            if tab == "pnl":
+                headers = ["Month", "Revenue", "COGS", "Gross Profit", "Extra Income", "Net Profit"]
+                export_to_csv(self._pnl_rows(year), headers, f"pnl_{year}.csv")
+            elif tab == "tax":
+                cols, rows, _rate, _country, _en = self._tax_rows(year)
+                export_to_csv(rows, cols, f"tax_summary_{year}.csv")
+            else:
+                headers = ["Rank", "Item", "Category", "Qty Sold", "Revenue", "Profit", "% of Revenue"]
+                export_to_csv(self._top_items_rows(), headers, "top_items.csv")
+            return
 
         if tab == "sales":
             if view == "daily":
@@ -490,6 +699,10 @@ class ReportsPage(ttk.Frame):
     def _export_pdf(self):
         from tkinter import filedialog
         from utils.pdf_export import export_sales_report, HAVE_REPORTLAB
+        from utils.feature_gate import require_feature
+        if not require_feature("advanced_reports", parent=self,
+                               friendly_name="PDF Report Export"):
+            return
 
         if not HAVE_REPORTLAB:
             messagebox.showwarning(
@@ -504,6 +717,36 @@ class ReportsPage(ttk.Frame):
         view = self.view_var.get()
         report_data = []
         title = "Report"
+
+        if tab in ("pnl", "tax", "top"):
+            year = self._get_year()
+            if year is None:
+                return
+            if tab == "pnl":
+                title = f"Profit & Loss — {year}"
+                headers = ["Month", "Revenue", "COGS", "Gross Profit", "Extra Income", "Net Profit"]
+                report_data = [dict(zip(headers, r)) for r in self._pnl_rows(year)]
+            elif tab == "tax":
+                title = f"Tax Summary — {year}"
+                cols, rows, _rate, _country, _en = self._tax_rows(year)
+                report_data = [dict(zip(cols, r)) for r in rows]
+            else:
+                title = "Top Items (All Time)"
+                headers = ["#", "Item", "Category", "Qty Sold", "Revenue", "Profit", "% of Revenue"]
+                report_data = [dict(zip(headers, r)) for r in self._top_items_rows()]
+            filepath = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                initialfile=f"{tab}_{year if tab != 'top' else 'all'}.pdf",
+            )
+            if not filepath:
+                return
+            success, msg = export_sales_report(report_data, filepath, title=title)
+            if success:
+                messagebox.showinfo("Export Successful", msg)
+            else:
+                messagebox.showerror("Export Failed", msg)
+            return
 
         if tab == "sales":
             title = "Sales Report"

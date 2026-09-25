@@ -14,6 +14,8 @@ DEFAULT_COMPANY = {
     "email": "",
     "gstin": "",
     "pan": "",
+    "upi_id": "",
+    "payment_instructions": "",
     "invoice_prefix": "INV",
     "invoice_note": "Thank you for your business!",
 }

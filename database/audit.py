@@ -11,11 +11,27 @@ logger = logging.getLogger(__name__)
 AUDIT_SHEET = "AuditLog"
 
 
+def _save_wb(wb):
+    import uuid
+    tmp = excel_db._active_file + "." + uuid.uuid4().hex + ".tmp"
+    try:
+        wb.save(tmp)
+        os.replace(tmp, excel_db._active_file)
+    except Exception:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        raise
+    finally:
+        wb.close()
+
+
 def _get_or_create_audit_sheet(wb):
     if AUDIT_SHEET not in wb.sheetnames:
         ws = wb.create_sheet(AUDIT_SHEET)
         ws.append(["Timestamp", "User", "Action", "Entity", "Record_ID", "Details"])
-        wb.save()
     return wb[AUDIT_SHEET]
 
 
@@ -31,8 +47,7 @@ def log(action, entity, record_id, details=""):
         user = auth_manager.get_current_user() or "system"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws.append([timestamp, user, action, entity, str(record_id), str(details)])
-        wb.save()
-        wb.close()
+        _save_wb(wb)
         logger.debug(f"Audit: {user} {action} {entity} #{record_id}")
     except Exception as exc:
         logger.error(f"Audit log failed: {exc}")
@@ -59,7 +74,6 @@ def log_login(user, success=True):
         ws = _get_or_create_audit_sheet(wb)
         status = "LOGIN_OK" if success else "LOGIN_FAIL"
         ws.append([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, status, "Auth", "", ""])
-        wb.save()
-        wb.close()
+        _save_wb(wb)
     except Exception:
         pass

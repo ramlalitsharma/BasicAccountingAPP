@@ -184,6 +184,10 @@ def get_default_feature_flags(vertical_key: str) -> Dict[str, bool]:
     defaults = {k: (k in primary) for k, _, _ in ALL_FEATURES}
     for k, val in v.get("default_features", {}).items():
         defaults[k] = val
+    # The audit trail is a safety/compliance feature: on unless the operator
+    # explicitly turned it off for this vertical.
+    if "audit_trail" not in v.get("default_features", {}):
+        defaults["audit_trail"] = True
     return defaults
 
 
@@ -195,3 +199,40 @@ def get_extra_stock_fields(vertical_key: str) -> List[str]:
 def get_extra_customer_fields(vertical_key: str) -> List[str]:
     v = VERTICALS.get(vertical_key)
     return v.get("extra_customer_fields", []) if v else []
+
+
+# Registry of the optional per-vertical columns (workbook column name ↔ UI).
+# kind: "text" | "number" | "date" (YYYY-MM-DD) | "choice" (uses choices).
+EXTRA_FIELD_DEFS: Dict[str, Dict] = {
+    # stock extras
+    "barcode":        {"column": "Barcode",            "label": "Barcode",                "kind": "text"},
+    "weight_grams":   {"column": "Weight_Grams",       "label": "Weight (grams)",         "kind": "number"},
+    "batch_no":       {"column": "Batch_No",           "label": "Batch No.",              "kind": "text"},
+    "expiry_date":    {"column": "Expiry_Date",        "label": "Expiry Date (YYYY-MM-DD)", "kind": "date"},
+    "drug_schedule":  {"column": "Drug_Schedule",      "label": "Drug Schedule",          "kind": "choice",
+                       "choices": ["", "H", "H1", "X"]},
+    "fssai_no":       {"column": "FSSAI_No",           "label": "FSSAI Lic. No.",         "kind": "text"},
+    "fabric":         {"column": "Fabric",             "label": "Fabric",                 "kind": "text"},
+    "color":          {"column": "Color",              "label": "Color",                  "kind": "text"},
+    "size":           {"column": "Size",               "label": "Size",                   "kind": "text"},
+    "prep_time":      {"column": "Prep_Time",          "label": "Prep Time (min)",        "kind": "number"},
+    "recipe_ingredients": {"column": "Recipe_Ingredients", "label": "Recipe / Ingredients", "kind": "text"},
+    "sizes":          {"column": "Sizes",              "label": "Sizes",                  "kind": "text"},
+    # customer extras
+    "doctor_name":    {"column": "Doctor_Name",        "label": "Doctor Name",            "kind": "text"},
+    "prescription_no": {"column": "Prescription_No",   "label": "Prescription No.",       "kind": "text"},
+    "measurements":   {"column": "Measurements",       "label": "Measurements (free text)", "kind": "text"},
+    "table_no":       {"column": "Table_No",           "label": "Table No.",              "kind": "text"},
+}
+
+
+def get_stock_field_defs(vertical_key: str) -> List[tuple]:
+    """Ordered ``(field_key, def)`` list of the vertical's extra stock fields."""
+    return [(k, EXTRA_FIELD_DEFS[k]) for k in get_extra_stock_fields(vertical_key)
+            if k in EXTRA_FIELD_DEFS]
+
+
+def get_customer_field_defs(vertical_key: str) -> List[tuple]:
+    """Ordered ``(field_key, def)`` list of the vertical's extra customer fields."""
+    return [(k, EXTRA_FIELD_DEFS[k]) for k in get_extra_customer_fields(vertical_key)
+            if k in EXTRA_FIELD_DEFS]

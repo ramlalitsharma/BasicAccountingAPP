@@ -64,15 +64,22 @@ def _check_write_lock():
         _UPDATE_CACHE["mandatory"] = False
 
 SHEETS = {
-    "Suppliers": ["ID", "Name", "Contact", "Address", "Created_At"],
+    "Suppliers": ["ID", "Name", "Contact", "Address", "Created_At",
+                  "Email", "Phone", "Notify_Email", "Notify_WhatsApp"],
     "Stock": ["ID", "Item_Name", "Category", "Quantity", "Min_Quantity",
-              "Purchase_Price", "Selling_Price", "Supplier_ID", "Created_At"],
-    "Sales": ["ID", "Stock_ID", "Customer_ID", "Quantity_Sold", "Price", "Total", 
-              "Payment_Status", "Paid_Amount", "Unpaid_Amount", "Payment_Date", 
+              "Purchase_Price", "Selling_Price", "Supplier_ID", "Created_At",
+              "Barcode", "Weight_Grams", "Batch_No", "Expiry_Date",
+              "Drug_Schedule", "FSSAI_No", "Fabric", "Color", "Size",
+              "Prep_Time", "Recipe_Ingredients"],
+    "Sales": ["ID", "Stock_ID", "Customer_ID", "Quantity_Sold", "Price", "Total",
+              "Payment_Status", "Paid_Amount", "Unpaid_Amount", "Payment_Date",
               "Sale_Date", "Receipt_No"],
     "StockLog": ["ID", "Stock_ID", "Change_Type", "Qty_Change", "Old_Qty",
                  "New_Qty", "Note", "Created_At"],
-    "Customers": ["ID", "Name", "Contact", "Address", "Created_At"],
+    "Customers": ["ID", "Name", "Contact", "Address", "Created_At",
+                  "Email", "Phone", "Notify_Email", "Notify_WhatsApp",
+                  "Doctor_Name", "Prescription_No", "Measurements", "Table_No",
+                  "Credit_Limit", "Portal_Enabled"],
     "Purchases": ["ID", "Stock_ID", "Supplier_ID", "Quantity", "Cost_Price",
                   "Total_Cost", "Purchase_Date"],
     "ExtraIncome": ["ID", "Source", "Description", "Amount", "Category", 
@@ -110,6 +117,34 @@ def _backup_file(filepath):
         logger.warning("Backup failed for %s: %s", filepath, e)
 
 
+def _ensure_contact_columns(wb):
+    """Add notification-opt-in and per-vertical extra columns to existing
+    workbooks (older files predate them). Header sets live in SHEETS."""
+    extra_columns = {
+        "Customers": SHEETS["Customers"][5:],   # after Created_At
+        "Suppliers": SHEETS["Suppliers"][5:],
+        "Stock": SHEETS["Stock"][9:],
+    }
+    changed = False
+    for sheet_name, contact_columns in extra_columns.items():
+        if sheet_name not in wb.sheetnames:
+            continue
+        ws = wb[sheet_name]
+        if ws.max_row == 0:
+            ws.append(contact_columns)
+            changed = True
+            continue
+        existing = [cell.value for cell in ws[1]]
+        for col in contact_columns:
+            if col not in existing:
+                max_col = ws.max_column or len(existing)
+                col_letter = get_column_letter(max_col + 1)
+                ws[f"{col_letter}1"] = col
+                existing.append(col)
+                changed = True
+    return changed
+
+
 def _ensure_sheets(wb):
     changed = False
     for name, headers in SHEETS.items():
@@ -120,6 +155,7 @@ def _ensure_sheets(wb):
     if "Sheet" in wb.sheetnames:
         del wb["Sheet"]
         changed = True
+    changed = _ensure_contact_columns(wb) or changed
     return changed
 
 
@@ -241,6 +277,12 @@ def _dicts_to_sheet(ws, dicts, headers):
 
 def _audit(action, entity, record_id, details=""):
     try:
+        from utils.settings_helper import is_feature_enabled
+        if not is_feature_enabled("audit_trail"):
+            return
+    except Exception:
+        pass  # settings unreadable -> keep auditing (fail-safe on/off)
+    try:
         from database.audit import log
         log(action, entity, record_id, details)
     except Exception:
@@ -266,13 +308,17 @@ def _next_id(ws):
 # ---- SUPPLIERS ----
 
 @synchronized
-def add_supplier(name, contact="", address=""):
+def add_supplier(name, contact="", address="", email="", phone="",
+                 notify_email=False, notify_whatsapp=False):
     _check_write_lock()
     wb = _get_wb()
     try:
         ws = wb["Suppliers"]
         sid = _next_id(ws)
-        ws.append([sid, name, contact, address, _now()])
+        ws.append([sid, name, contact, address, _now(),
+                   email, phone,
+                   "Yes" if notify_email else "No",
+                   "Yes" if notify_whatsapp else "No"])
         _save_and_close(wb)
         _audit("CREATE", "Supplier", sid)
 
@@ -303,7 +349,9 @@ def get_supplier(supplier_id):
 
 
 @synchronized
-def update_supplier(supplier_id, name, contact, address):
+def update_supplier(supplier_id, name, contact, address,
+                    email="", phone="", notify_email=False,
+                    notify_whatsapp=False):
     _check_write_lock()
     wb = _get_wb()
     try:
@@ -314,6 +362,10 @@ def update_supplier(supplier_id, name, contact, address):
                 r["Name"] = name
                 r["Contact"] = contact
                 r["Address"] = address
+                r["Email"] = email
+                r["Phone"] = phone
+                r["Notify_Email"] = "Yes" if notify_email else "No"
+                r["Notify_WhatsApp"] = "Yes" if notify_whatsapp else "No"
                 break
         _dicts_to_sheet(ws, data, SHEETS["Suppliers"])
         _save_and_close(wb)
@@ -349,14 +401,22 @@ def delete_supplier(supplier_id):
 
 @synchronized
 def add_stock_item(item_name, category, quantity, purchase_price, selling_price,
-                   min_quantity=5, supplier_id=None):
+                   min_quantity=5, supplier_id=None, extras=None):
+    """``extras`` may carry the optional per-vertical columns (Barcode,
+    Batch_No, Expiry_Date, …) keyed by their exact column names."""
     _check_write_lock()
     wb = _get_wb()
     try:
         ws = wb["Stock"]
         sid = _next_id(ws)
-        ws.append([sid, item_name, category, quantity, min_quantity,
-                   purchase_price, selling_price, supplier_id, _now()])
+        row_map = {
+            "ID": sid, "Item_Name": item_name, "Category": category,
+            "Quantity": quantity, "Min_Quantity": min_quantity,
+            "Purchase_Price": purchase_price, "Selling_Price": selling_price,
+            "Supplier_ID": supplier_id, "Created_At": _now(),
+        }
+        row_map.update(extras or {})
+        ws.append([_sanitize(row_map.get(h, "")) for h in SHEETS["Stock"]])
         _log_stock_change_internal(wb, sid, "add", quantity, 0, f"Added {quantity} units")
         _save_and_close(wb)
         _audit("CREATE", "Stock", sid)
@@ -396,7 +456,7 @@ def get_stock_item(stock_id):
 
 @synchronized
 def update_stock_item(stock_id, item_name, category, quantity, min_quantity,
-                      purchase_price, selling_price, supplier_id=None):
+                      purchase_price, selling_price, supplier_id=None, extras=None):
     _check_write_lock()
     wb = _get_wb()
     try:
@@ -412,6 +472,9 @@ def update_stock_item(stock_id, item_name, category, quantity, min_quantity,
                 r["Purchase_Price"] = purchase_price
                 r["Selling_Price"] = selling_price
                 r["Supplier_ID"] = supplier_id
+                for k, v in (extras or {}).items():
+                    if k in SHEETS["Stock"]:
+                        r[k] = v
                 if old_qty != quantity:
                     diff = quantity - old_qty
                     _log_stock_change_internal(wb, stock_id, "adjustment", diff,
@@ -452,6 +515,28 @@ def get_low_stock_items():
     data = _sheet_to_dicts(wb["Stock"])
     wb.close()
     return [r for r in data if r.get("Quantity", 0) <= r.get("Min_Quantity", 0)]
+
+
+def get_expiring_items(within_days=30):
+    """Stock items whose Expiry_Date falls within ``within_days`` (including
+    already-expired). Sorted soonest-first. Rows without a parseable
+    YYYY-MM-DD expiry are ignored."""
+    from datetime import date
+    today = date.today()
+    out = []
+    for r in get_stock_items():
+        exp = str(r.get("Expiry_Date") or "").strip()[:10]
+        if not exp:
+            continue
+        try:
+            d = datetime.strptime(exp, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+        r["days_to_expiry"] = (d - today).days
+        if r["days_to_expiry"] <= within_days:
+            out.append(r)
+    out.sort(key=lambda r: r["days_to_expiry"])
+    return out
 
 
 def get_categories():
@@ -540,12 +625,58 @@ def record_sale(stock_id, quantity_sold, price, customer_id=None,
         _dicts_to_sheet(stock_ws, stock_data, SHEETS["Stock"])
         _log_stock_change_internal(wb, stock_id, "sale", -quantity_sold,
                                     old_qty, f"Sold {quantity_sold} units")
+        # Recipe / combo tracking: deduct ingredient stock for items that
+        # declare "IngredientName:qtyPerUnit, …" in their Recipe_Ingredients.
+        _deduct_recipe_ingredients(wb, stock_data, item, quantity_sold, sid)
+        _dicts_to_sheet(stock_ws, stock_data, SHEETS["Stock"])
         _save_and_close(wb)
         _audit("CREATE", "Sale", sid)
         return sid, receipt_no
     except Exception:
         _close_wb(wb)
         raise
+
+
+def _deduct_recipe_ingredients(wb, stock_data, sold_item, qty_sold, sale_id):
+    """Best-effort ingredient deduction for recipe/combo items.
+
+    ``Recipe_Ingredients`` format (item names as they appear in Stock):
+    ``"Coffee Beans:0.02, Milk:0.25"`` — qty is the amount of each ingredient
+    consumed per 1 unit of the sold item. Never raises: a bad recipe string
+    or missing ingredient just logs a warning (the sale stays valid).
+    """
+    recipe = str(sold_item.get("Recipe_Ingredients") or "").strip()
+    if not recipe:
+        return
+    try:
+        from utils.settings_helper import is_feature_enabled
+        if not is_feature_enabled("recipe_tracking"):
+            return
+    except Exception:
+        return
+    by_name = {str(r.get("Item_Name", "")).strip().lower(): r for r in stock_data}
+    for part in recipe.split(","):
+        part = part.strip()
+        if not part or ":" not in part:
+            continue
+        name, _, qty_raw = part.partition(":")
+        name = name.strip().lower()
+        try:
+            per_unit = float(str(qty_raw).strip())
+        except (ValueError, TypeError):
+            logger.warning("Recipe parse failed for %r on item #%s",
+                           part, sold_item.get("ID"))
+            continue
+        ingr = by_name.get(name)
+        need = round(per_unit * qty_sold, 4)
+        if ingr is None or per_unit <= 0:
+            logger.warning("Recipe ingredient %r not found in stock", name)
+            continue
+        old = _num(ingr.get("Quantity", 0))
+        ingr["Quantity"] = max(0, old - need)
+        _log_stock_change_internal(wb, ingr.get("ID"), "recipe",
+                                   -need, old,
+                                   f"Recipe deduction via sale #{sale_id}")
 
 
 @synchronized
@@ -828,13 +959,21 @@ def get_year_months():
 # ---- CUSTOMERS ----
 
 @synchronized
-def add_customer(name, contact="", address=""):
+def add_customer(name, contact="", address="", email="", phone="",
+                 notify_email=False, notify_whatsapp=False, extras=None):
     _check_write_lock()
     wb = _get_wb()
     try:
         ws = wb["Customers"]
         cid = _next_id(ws)
-        ws.append([cid, name, contact, address, _now()])
+        row_map = {
+            "ID": cid, "Name": name, "Contact": contact, "Address": address,
+            "Created_At": _now(), "Email": email, "Phone": phone,
+            "Notify_Email": "Yes" if notify_email else "No",
+            "Notify_WhatsApp": "Yes" if notify_whatsapp else "No",
+        }
+        row_map.update(extras or {})
+        ws.append([_sanitize(row_map.get(h, "")) for h in SHEETS["Customers"]])
         _save_and_close(wb)
         return cid
     except Exception:
@@ -862,8 +1001,33 @@ def get_customer(customer_id):
     return None
 
 
+def get_customer_statement(customer_id):
+    """All sales for a customer, oldest first, with a running balance
+    (Total - Paid accumulated). Used by the Customer Statement view."""
+    sales = [s for s in get_sales() if s.get("Customer_ID") == customer_id]
+    sales.sort(key=lambda s: str(s.get("Sale_Date") or ""))
+    bal = 0.0
+    rows = []
+    for s in sales:
+        total = _num(s.get("Total", 0))
+        paid = _num(s.get("Paid_Amount", 0))
+        bal += total - paid
+        row = dict(s)
+        row["running_balance"] = round(bal, 2)
+        rows.append(row)
+    return rows
+
+
+def get_customer_due(customer_id):
+    """Current outstanding amount for one customer."""
+    return round(sum(_num(s.get("Unpaid_Amount", 0))
+                     for s in get_sales() if s.get("Customer_ID") == customer_id), 2)
+
+
 @synchronized
-def update_customer(customer_id, name, contact, address):
+def update_customer(customer_id, name, contact, address,
+                    email="", phone="", notify_email=False,
+                    notify_whatsapp=False, extras=None):
     _check_write_lock()
     wb = _get_wb()
     try:
@@ -874,6 +1038,13 @@ def update_customer(customer_id, name, contact, address):
                 r["Name"] = name
                 r["Contact"] = contact
                 r["Address"] = address
+                r["Email"] = email
+                r["Phone"] = phone
+                r["Notify_Email"] = "Yes" if notify_email else "No"
+                r["Notify_WhatsApp"] = "Yes" if notify_whatsapp else "No"
+                for k, v in (extras or {}).items():
+                    if k in SHEETS["Customers"]:
+                        r[k] = v
                 break
         _dicts_to_sheet(ws, data, SHEETS["Customers"])
         _save_and_close(wb)

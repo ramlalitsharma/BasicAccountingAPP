@@ -37,6 +37,7 @@ from ui.pages.extra_income import ExtraIncomePage
 from ui.widgets.toast import Toast
 from ui.widgets.about import AboutDialog
 from ui.pages.welcome import WelcomePage
+from ui.pages.bank_recon import BankReconPage
 from utils.license import license_mgr
 from utils.update_checker import (
     check_for_update_async, get_update_status,
@@ -59,20 +60,26 @@ NAV_ITEMS = [
     ("extra_income", "\u20B9  Extra Income"),
     ("preorders", "\u25CB  Preorders"),
     ("reports", "\u25A4  Reports"),
+    ("bank_recon", "\U0001F3E6  Bank Recon"),
     ("settings", "\u2699  Settings"),
 ]
 
 
-# Maps each page to a function that returns True if it should be visible
-# based on current feature flags / vertical. The dashboard, stock, customers,
-# suppliers, purchases, sales, settings are always-on; the others are core.
+# Sidebar visibility rule: user's hidden-pages list (Settings → General,
+# per-user) + feature-gated pages (e.g. Bank Recon only appears when the
+# feature flag is on).
+_FEATURE_GATED_PAGES = {
+    "bank_recon": "bank_recon",
+}
+
+
 def _is_page_visible(page_key: str) -> bool:
-    """Filter sidebar pages based on enabled features."""
-    from utils.settings_helper import is_feature_enabled
-    always_active = {"dashboard", "stock", "sales", "customers", "suppliers",
-                     "purchases", "reports", "settings", "extra_income"}
-    if page_key in always_active:
-        return True
+    from utils.settings_helper import get_user_setting, is_feature_enabled
+    if page_key in set(get_user_setting("nav.hidden_pages", []) or []):
+        return False
+    needed = _FEATURE_GATED_PAGES.get(page_key)
+    if needed and not is_feature_enabled(needed):
+        return False
     return True
 
 
@@ -180,6 +187,29 @@ class AccountingApp(tk.Tk):
             from ui.login_dialog import LoginDialog
             if not LoginDialog(self).show():
                 self._on_close()
+                return
+            # Apply the logged-in user's saved theme, if any.
+            try:
+                from utils.settings_helper import get_user_setting
+                from config import get_setting
+                user_theme = get_user_setting("theme", None)
+                if user_theme and user_theme != get_setting("theme", "Light"):
+                    from config import set_setting
+                    set_setting("theme", user_theme)
+                    self._apply_theme()
+                    self.reload_all_pages()
+            except Exception:
+                pass
+            # Nudge when the account is on a default / admin-reset password.
+            try:
+                from utils.auth import auth_manager
+                if auth_manager.needs_password_reset():
+                    self.toast.show(
+                        "\u26A0  Security: this account is using a default/temporary password — "
+                        "change it in Settings → Users.",
+                        "warning", 9000)
+            except Exception:
+                pass
         except Exception as exc:
             print(f"Login dialog failed (non-fatal): {exc}")
 
@@ -634,6 +664,37 @@ class AccountingApp(tk.Tk):
         style.configure("TNotebook.Tab", background=bg_dark, foreground=text_secondary, padding=[12, 4])
         style.map("TNotebook.Tab", background=[("selected", card_bg)], foreground=[("selected", text_primary)])
 
+        # ── premium polish pass ──
+        # Roomier, flatter data grids
+        style.configure("Treeview", rowheight=26)
+        style.configure("Treeview.Heading", padding=(8, 6))
+        # Tabs read as pills with clear hierarchy
+        style.configure("TNotebook.Tab", padding=[16, 7], font=(FONT_FAMILY, FONT_SIZE_MD))
+        # Slim modern scrollbars
+        style.configure("Vertical.TScrollbar", troughcolor=bg, background=bg_dark,
+                        borderwidth=0, arrowsize=12)
+        style.map("Vertical.TScrollbar", background=[("active", text_muted)])
+        style.configure("Horizontal.TScrollbar", troughcolor=bg, background=bg_dark,
+                        borderwidth=0, arrowsize=12)
+        style.map("Horizontal.TScrollbar", background=[("active", text_muted)])
+        # Semantic button variants available app-wide
+        style.configure("Danger.TButton", background=get_color("DANGER_COLOR"))
+        style.map("Danger.TButton",
+                  background=[("active", get_color("DANGER_LIGHT")),
+                              ("pressed", get_color("DANGER_COLOR"))],
+                  foreground=[("active", "white")])
+        style.configure("Success.TButton", background=get_color("SUCCESS_COLOR"))
+        style.map("Success.TButton",
+                  background=[("active", get_color("SUCCESS_LIGHT")),
+                              ("pressed", get_color("SUCCESS_COLOR"))],
+                  foreground=[("active", "white")])
+        # Comboboxes match themed entries
+        style.configure("TCombobox", padding=5, fieldbackground=card_bg,
+                        foreground=text_primary, background=card_bg)
+        style.map("TCombobox", fieldbackground=[("readonly", card_bg)],
+                  foreground=[("readonly", text_primary)],
+                  background=[("readonly", card_bg)])
+
         self.configure(bg=primary if not is_dark else sidebar_bg)
         if hasattr(self, '_titlebar') and self._titlebar.winfo_exists():
             self._titlebar.configure(bg=primary)
@@ -770,6 +831,7 @@ class AccountingApp(tk.Tk):
             "extra_income": ExtraIncomePage,
             "preorders": PreordersPage,
             "reports": ReportsPage,
+            "bank_recon": BankReconPage,
             "settings": SettingsPage,
         }
 
@@ -798,6 +860,14 @@ class AccountingApp(tk.Tk):
             self.file_label.config(text="No file open")
             self.status_file_lbl.config(text="No file open")
 
+    def _start_page_key(self):
+        try:
+            from utils.settings_helper import get_user_setting
+            key = get_user_setting("nav.start_page", "dashboard")
+        except Exception:
+            key = "dashboard"
+        return key if key in dict(NAV_ITEMS) else "dashboard"
+
     def _initial_file_setup(self):
         logger.info("Initial file setup")
 
@@ -811,7 +881,7 @@ class AccountingApp(tk.Tk):
             try:
                 models.open_workbook(last_file)
                 self._update_file_label()
-                self._navigate("dashboard")
+                self._navigate(self._start_page_key())
                 self.toast.show(
                     f"Welcome back! Loaded: {os.path.basename(last_file)}",
                     "success", 3000)
@@ -840,7 +910,7 @@ class AccountingApp(tk.Tk):
         self._update_file_label()
 
         if models.get_active_file():
-            self._navigate("dashboard")
+            self._navigate(self._start_page_key())
             self.toast.show(f"Welcome to {APP_NAME}", "success", 3000)
             self._schedule_auto_update_check()
             self.after(2000, lambda: check_for_update_async(

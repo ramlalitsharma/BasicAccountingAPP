@@ -56,6 +56,11 @@ def start_auto_backup(interval_minutes=30):
 
     def _run():
         create_backup()
+        try:
+            from utils.cloud_backup import maybe_auto_upload
+            maybe_auto_upload()
+        except Exception:
+            pass
         global _auto_backup_timer
         _auto_backup_timer = threading.Timer(interval_minutes * 60, _run)
         _auto_backup_timer.daemon = True

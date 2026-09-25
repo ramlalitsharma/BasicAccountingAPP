@@ -33,11 +33,14 @@ _TIER_PRICING = {
 }
 
 _FEATURE_DISPLAY = [
-    ("whatsapp_invoice",  "WhatsApp Invoice"),
-    ("cloud_backup",       "Cloud Backup"),
-    ("email_invoicing",    "Email Invoicing"),
-    ("advanced_reports",   "Advanced Reports"),
-    ("multi_company",     "Multi-Company"),
+    ("whatsapp_invoice",       "WhatsApp Invoice"),
+    ("cloud_backup",            "Cloud Backup"),
+    ("email_invoicing",         "Email Invoicing"),
+    ("advanced_reports",        "Advanced Reports"),
+    ("multi_company",           "Multi-Company"),
+    ("customer_notifications",  "Customer Notifications"),
+    ("purchase_notifications",  "Purchase Notifications"),
+    ("sale_notifications",      "Sale Notifications"),
 ]
 
 
@@ -160,6 +163,18 @@ def build_license_tab(notebook: ttk.Notebook, app_ctx: Any) -> ttk.Frame:
                    command=lambda: _do_deactivate(app_ctx, frame)
                    ).pack(side=tk.LEFT, padx=(0, 6))
 
+    # ── Sales / self-service row ───────────────────────────────────────────
+    sales_row = ttk.Frame(frame)
+    sales_row.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    row += 1
+    ttk.Button(sales_row, text="Copy Machine ID",
+               command=lambda: _copy_machine_id(app_ctx)).pack(side=tk.LEFT, padx=(0, 6))
+    ttk.Button(sales_row, text="Request Upgrade / Extend",
+               command=lambda: _request_upgrade(app_ctx)).pack(side=tk.LEFT, padx=(0, 6))
+    ttk.Label(sales_row, text="Share your Machine ID with sales to issue or extend a license.",
+              font=(FONT_FAMILY, FONT_SIZE_MD),
+              foreground=TEXT_MUTED).pack(side=tk.LEFT, padx=6)
+
     # ── Pricing hint ────────────────────────────────────────────────────
     row += 1
     ttk.Label(frame, text="Plans:",
@@ -175,6 +190,60 @@ def build_license_tab(notebook: ttk.Notebook, app_ctx: Any) -> ttk.Frame:
         row += 1
 
     return frame
+
+
+def _copy_machine_id(app_ctx: Any) -> None:
+    """Copy the machine identity to the clipboard for license issuance."""
+    try:
+        mid = license_mgr.machine_id
+        label = license_mgr.machine_label
+        app_ctx.clipboard_clear()
+        app_ctx.clipboard_append(mid)
+        app_ctx.toast.show(f"Machine ID copied ({label})", "success", 4000)
+    except Exception as exc:
+        messagebox.showerror("Machine ID", f"Could not copy: {exc}")
+
+
+def _request_upgrade(app_ctx: Any) -> None:
+    """Open a prefilled email to sales requesting a plan upgrade/extension."""
+    import urllib.parse
+    import webbrowser
+    from config import get_setting
+    sales_email = (get_setting("business.sales_email", "") or "").strip()
+    mid = license_mgr.machine_id
+    subject = f"Accounting Pro license request — {license_mgr.tier_name}"
+    body_lines = [
+        "Hello,",
+        "",
+        "I would like to upgrade/extend my Accounting Pro license.",
+        "",
+        f"Current plan : {license_mgr.tier_name}",
+        f"Expires      : {license_mgr.expires_date or '—'}",
+        f"Machine ID   : {mid}",
+        f"Machine label: {license_mgr.machine_label}",
+        f"Requested plan: [ Basic ₹1,500/mo | Professional ₹3,500/mo | Enterprise ₹8,500/mo ]",
+        "",
+        "Thank you!",
+    ]
+    body = "\n".join(body_lines)
+    if not sales_email:
+        try:
+            app_ctx.clipboard_clear()
+            app_ctx.clipboard_append(f"{subject}\n\n{body}")
+        except Exception:
+            pass
+        messagebox.showinfo(
+            "Request Upgrade",
+            "The request text (with your Machine ID) has been copied to the clipboard.\n\n"
+            "Paste it into an email/WhatsApp message to your software vendor.\n"
+            "(Tip: set 'License Sales Email' in Settings → Business for one-click requests.)")
+        return
+    url = (f"mailto:{sales_email}?subject={urllib.parse.quote(subject)}"
+           f"&body={urllib.parse.quote(body)}")
+    try:
+        webbrowser.open(url)
+    except Exception as exc:
+        messagebox.showerror("Request Upgrade", f"Could not open email client: {exc}")
 
 
 def _show_activate_dialog(app_ctx: Any, frame: ttk.Frame) -> None:
